@@ -1,9 +1,51 @@
 // SPDX-License-Identifier: GPL-3.0
 
-use cosmic::cosmic_config::{self, CosmicConfigEntry, cosmic_config_derive::CosmicConfigEntry};
+use cosmic::{
+    cosmic_config::{self, Config, CosmicConfigEntry, cosmic_config_derive::CosmicConfigEntry},
+    theme,
+};
+use serde::{Deserialize, Serialize};
+
+const APP_ID: &str = "dev.mariinkys.Cedilla";
+const CONFIG_VERSION: u64 = 1;
 
 #[derive(Debug, Default, Clone, CosmicConfigEntry, Eq, PartialEq)]
-#[version = 1]
-pub struct Config {
-    demo: String,
+pub struct CedillaConfig {
+    pub app_theme: AppTheme,
+}
+
+impl CedillaConfig {
+    pub fn config_handler() -> Option<Config> {
+        Config::new(APP_ID, CONFIG_VERSION).ok()
+    }
+
+    pub fn config() -> Self {
+        match Self::config_handler() {
+            Some(config_handler) => {
+                CedillaConfig::get_entry(&config_handler).unwrap_or_else(|(error, config)| {
+                    eprintln!("Error whilst loading config: {error:#?}");
+                    config
+                })
+            }
+            None => CedillaConfig::default(),
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
+pub enum AppTheme {
+    Dark,
+    Light,
+    #[default]
+    System,
+}
+
+impl AppTheme {
+    pub fn theme(&self) -> theme::Theme {
+        match self {
+            Self::Dark => theme::Theme::dark(),
+            Self::Light => theme::Theme::light(),
+            Self::System => theme::system_preference(),
+        }
+    }
 }

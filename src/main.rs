@@ -1,7 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0
 
+use crate::flags::flags;
+
 mod app;
 mod config;
+mod flags;
 mod i18n;
 
 fn main() -> cosmic::iced::Result {
@@ -12,12 +15,14 @@ fn main() -> cosmic::iced::Result {
     i18n::init(&requested_languages);
 
     // Settings for configuring the application window and iced runtime.
-    let settings = cosmic::app::Settings::default().size_limits(
-        cosmic::iced::Limits::NONE
-            .min_width(360.0)
-            .min_height(180.0),
-    );
+    let settings = cosmic::app::Settings::default()
+        .size_limits(
+            cosmic::iced::Limits::NONE
+                .min_height(420.0)
+                .min_width(360.0),
+        )
+        .size(cosmic::iced::Size::new(1200.0, 800.0));
 
     // Starts the application's event loop with `()` as the application's flags.
-    cosmic::app::run::<app::AppModel>(settings, ())
+    cosmic::app::run::<app::AppModel>(settings, flags())
 }
