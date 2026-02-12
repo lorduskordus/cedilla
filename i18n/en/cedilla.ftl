@@ -17,3 +17,6 @@ file = File
 open-file = Open File
 new-file = New File
 save-file = Save File
+
+editor = Editor
+preview = Preview
