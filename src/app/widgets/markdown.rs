@@ -56,7 +56,7 @@ use cosmic::iced_core::padding;
 use cosmic::iced_core::theme;
 use cosmic::iced_core::{Color, Element, Length, Padding, Pixels, color};
 use cosmic::iced_widget::{
-    column, container, horizontal_rule, rich_text, row, rule, scrollable, span, text,
+    column, container, horizontal_rule, rich_text, row, rule, scrollable, span, text, vertical_rule,
 };
 use cosmic::theme::Theme;
 
@@ -191,6 +191,8 @@ pub enum Item {
     },
     /// Horizontal Line
     Rule,
+    /// Blockquotes
+    Blockquote(Vec<Item>),
 }
 
 impl Item {
@@ -310,6 +312,26 @@ impl Item {
             .class(Theme::code_block())
             .into(),
             Item::Rule => container(horizontal_rule(1.)).width(Length::Fill).into(),
+            Item::Blockquote(items) => {
+                let quote_content: Element<'a, Url, Theme, Renderer> = column(
+                    items
+                        .iter()
+                        .map(|item| view_with([item], settings, style, view)),
+                )
+                .spacing(spacing)
+                .into();
+
+                row![
+                    container(vertical_rule(4.0))
+                        .width(4.0)
+                        .height(Length::Fill),
+                    quote_content
+                ]
+                .height(Length::Shrink)
+                .spacing(spacing)
+                .align_y(cosmic::iced::Alignment::Center)
+                .into()
+            }
         }
     }
 }
@@ -545,9 +567,14 @@ fn parse_with<'a>(
     mut state: impl BorrowMut<State> + 'a,
     markdown: &'a str,
 ) -> impl Iterator<Item = (Item, &'a str, HashSet<String>)> + 'a {
-    struct List {
-        start: Option<u64>,
-        items: Vec<Vec<Item>>,
+    enum Container {
+        List {
+            start: Option<u64>,
+            items: Vec<Vec<Item>>,
+        },
+        Blockquote {
+            items: Vec<Item>,
+        },
     }
 
     let broken_links = Rc::new(RefCell::new(HashSet::new()));
@@ -560,7 +587,7 @@ fn parse_with<'a>(
     let mut metadata = false;
     let mut table = false;
     let mut link = None;
-    let mut lists = Vec::new();
+    let mut containers: Vec<Container> = Vec::new();
 
     let mut highlighter = None;
 
@@ -593,27 +620,28 @@ fn parse_with<'a>(
         let _ = references.insert(reference.0.to_owned(), reference.1.dest.to_string());
     }
 
-    let produce = move |state: &mut State, lists: &mut Vec<List>, item, source: Range<usize>| {
-        if lists.is_empty() {
-            state.leftover = markdown[source.start..].to_owned();
+    let produce =
+        move |state: &mut State, containers: &mut Vec<Container>, item, source: Range<usize>| {
+            if containers.is_empty() {
+                state.leftover = markdown[source.start..].to_owned();
 
-            Some((
-                item,
-                &markdown[source.start..source.end],
-                broken_links.take(),
-            ))
-        } else {
-            lists
-                .last_mut()
-                .expect("list context")
-                .items
-                .last_mut()
-                .expect("item context")
-                .push(item);
-
-            None
-        }
-    };
+                Some((
+                    item,
+                    &markdown[source.start..source.end],
+                    broken_links.take(),
+                ))
+            } else {
+                match containers.last_mut().expect("container context") {
+                    Container::List { items, .. } => {
+                        items.last_mut().expect("item context").push(item);
+                    }
+                    Container::Blockquote { items } => {
+                        items.push(item);
+                    }
+                }
+                None
+            }
+        };
 
     let parser = parser.into_offset_iter();
 
@@ -649,13 +677,13 @@ fn parse_with<'a>(
                 } else {
                     produce(
                         state.borrow_mut(),
-                        &mut lists,
+                        &mut containers,
                         Item::Paragraph(Text::new(spans.drain(..).collect())),
                         source,
                     )
                 };
 
-                lists.push(List {
+                containers.push(Container::List {
                     start: first_item,
                     items: Vec::new(),
                 });
@@ -663,11 +691,9 @@ fn parse_with<'a>(
                 prev
             }
             pulldown_cmark::Tag::Item => {
-                lists
-                    .last_mut()
-                    .expect("list context")
-                    .items
-                    .push(Vec::new());
+                if let Some(Container::List { items, .. }) = containers.last_mut() {
+                    items.push(Vec::new());
+                }
                 None
             }
             pulldown_cmark::Tag::CodeBlock(pulldown_cmark::CodeBlockKind::Fenced(_language))
@@ -693,7 +719,7 @@ fn parse_with<'a>(
                 } else {
                     produce(
                         state.borrow_mut(),
-                        &mut lists,
+                        &mut containers,
                         Item::Paragraph(Text::new(spans.drain(..).collect())),
                         source,
                     )
@@ -707,12 +733,28 @@ fn parse_with<'a>(
                 table = true;
                 None
             }
+            pulldown_cmark::Tag::BlockQuote(_) if !metadata && !table => {
+                let prev = if spans.is_empty() {
+                    None
+                } else {
+                    produce(
+                        state.borrow_mut(),
+                        &mut containers,
+                        Item::Paragraph(Text::new(spans.drain(..).collect())),
+                        source,
+                    )
+                };
+
+                containers.push(Container::Blockquote { items: Vec::new() });
+
+                prev
+            }
             _ => None,
         },
         pulldown_cmark::Event::End(tag) => match tag {
             pulldown_cmark::TagEnd::Heading(level) if !metadata && !table => produce(
                 state.borrow_mut(),
-                &mut lists,
+                &mut containers,
                 Item::Heading(level, Text::new(spans.drain(..).collect())),
                 source,
             ),
@@ -734,7 +776,7 @@ fn parse_with<'a>(
             }
             pulldown_cmark::TagEnd::Paragraph if !metadata && !table => produce(
                 state.borrow_mut(),
-                &mut lists,
+                &mut containers,
                 Item::Paragraph(Text::new(spans.drain(..).collect())),
                 source,
             ),
@@ -744,24 +786,25 @@ fn parse_with<'a>(
                 } else {
                     produce(
                         state.borrow_mut(),
-                        &mut lists,
+                        &mut containers,
                         Item::Paragraph(Text::new(spans.drain(..).collect())),
                         source,
                     )
                 }
             }
             pulldown_cmark::TagEnd::List(_) if !metadata && !table => {
-                let list = lists.pop().expect("list context");
+                let container = containers.pop().expect("list context");
 
-                produce(
-                    state.borrow_mut(),
-                    &mut lists,
-                    Item::List {
-                        start: list.start,
-                        items: list.items,
-                    },
-                    source,
-                )
+                if let Container::List { start, items } = container {
+                    produce(
+                        state.borrow_mut(),
+                        &mut containers,
+                        Item::List { start, items },
+                        source,
+                    )
+                } else {
+                    None
+                }
             }
             pulldown_cmark::TagEnd::CodeBlock if !metadata && !table => {
                 {
@@ -770,7 +813,7 @@ fn parse_with<'a>(
 
                 produce(
                     state.borrow_mut(),
-                    &mut lists,
+                    &mut containers,
                     Item::CodeBlock(code.drain(..).collect()),
                     source,
                 )
@@ -783,9 +826,34 @@ fn parse_with<'a>(
                 table = false;
                 None
             }
+            pulldown_cmark::TagEnd::BlockQuote(_) if !metadata && !table => {
+                // Flush any remaining text in the blockquote into a paragraph
+                if !spans.is_empty() {
+                    produce(
+                        state.borrow_mut(),
+                        &mut containers,
+                        Item::Paragraph(Text::new(spans.drain(..).collect())),
+                        source.clone(),
+                    );
+                }
+
+                let container = containers.pop().expect("blockquote context");
+                if let Container::Blockquote { items } = container {
+                    produce(
+                        state.borrow_mut(),
+                        &mut containers,
+                        Item::Blockquote(items),
+                        source,
+                    )
+                } else {
+                    None
+                }
+            }
             _ => None,
         },
-        pulldown_cmark::Event::Rule => produce(state.borrow_mut(), &mut lists, Item::Rule, source),
+        pulldown_cmark::Event::Rule => {
+            produce(state.borrow_mut(), &mut containers, Item::Rule, source)
+        }
         pulldown_cmark::Event::Text(text) if !metadata && !table => {
             if let Some(highlighter) = &mut highlighter {
                 for line in text.lines() {
