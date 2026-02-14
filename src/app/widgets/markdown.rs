@@ -566,10 +566,7 @@ fn parse_with<'a>(
 
     let parser = pulldown_cmark::Parser::new_with_broken_link_callback(
         markdown,
-        pulldown_cmark::Options::ENABLE_YAML_STYLE_METADATA_BLOCKS
-            | pulldown_cmark::Options::ENABLE_PLUSES_DELIMITED_METADATA_BLOCKS
-            | pulldown_cmark::Options::ENABLE_TABLES
-            | pulldown_cmark::Options::ENABLE_STRIKETHROUGH,
+        pulldown_cmark::Options::ENABLE_TABLES | pulldown_cmark::Options::ENABLE_STRIKETHROUGH,
         {
             let references = state.borrow().references.clone();
             let broken_links = broken_links.clone();
