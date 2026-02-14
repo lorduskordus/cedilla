@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 //! Markdown widgets can parse and display Markdown.
 //!
 //! You can enable the `highlighter` feature for syntax highlighting
@@ -400,13 +402,11 @@ impl Span {
                     span
                 };
 
-                let span = if let Some(link) = link.as_ref() {
+                if let Some(link) = link.as_ref() {
                     span.color(style.link_color).link(link.clone())
                 } else {
                     span
-                };
-
-                span
+                }
             }
 
             Span::Highlight { text, color, font } => {
@@ -688,7 +688,7 @@ fn parse_with<'a>(
                     });
                 }
 
-                let prev = if spans.is_empty() {
+                if spans.is_empty() {
                     None
                 } else {
                     produce(
@@ -697,9 +697,7 @@ fn parse_with<'a>(
                         Item::Paragraph(Text::new(spans.drain(..).collect())),
                         source,
                     )
-                };
-
-                prev
+                }
             }
             pulldown_cmark::Tag::MetadataBlock(_) => {
                 metadata = true;
