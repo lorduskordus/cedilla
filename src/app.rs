@@ -659,16 +659,13 @@ fn cedilla_main_view<'a>(
 
     let main_content: Element<'a, Message> = if matches!(preview_state, PreviewState::Hidden) {
         // Editor only view
-        container(
-            column![
-                container(create_title("text-editor-symbolic", fl!("editor")))
-                    .padding(spacing.space_xxs)
-                    .width(Length::Fill)
-                    .class(theme::Container::Card),
-                create_editor()
-            ]
-            .spacing(spacing.space_xxxs),
-        )
+        container(column![
+            container(create_title("text-editor-symbolic", fl!("editor")))
+                .padding(3.)
+                .width(Length::Fill)
+                .class(theme::Container::Card),
+            create_editor()
+        ])
         .width(Length::Fill)
         .height(Length::Fill)
         .class(theme::Container::Card)
@@ -705,7 +702,7 @@ fn cedilla_main_view<'a>(
             };
 
             pane_grid::Content::new(pane_content)
-                .title_bar(pane_grid::TitleBar::new(create_title(icon_name, title)))
+                .title_bar(pane_grid::TitleBar::new(create_title(icon_name, title)).padding(3.))
                 .class(theme::Container::Card)
         })
         .on_drag(Message::PaneDragged)
