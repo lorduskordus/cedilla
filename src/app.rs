@@ -3,16 +3,14 @@
 use crate::app::app_menu::MenuAction;
 use crate::app::context_page::ContextPage;
 use crate::app::core::utils::{self, CedillaToast};
-use crate::app::widgets::{markdown, sensor};
+use crate::app::widgets::{TextEditor, markdown, sensor, text_editor};
 use crate::config::{AppTheme, CedillaConfig};
 use crate::{fl, icons};
 use cosmic::app::context_drawer;
 use cosmic::iced::{Alignment, Length, Subscription, highlighter};
 use cosmic::iced_widget::{center, column, row};
 use cosmic::widget::{self, about::About, menu};
-use cosmic::widget::{
-    Space, ToastId, Toasts, container, pane_grid, scrollable, text, text_editor, toaster,
-};
+use cosmic::widget::{Space, ToastId, Toasts, container, pane_grid, scrollable, text, toaster};
 use cosmic::{prelude::*, surface, theme};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -627,7 +625,7 @@ fn cedilla_main_view<'a>(
 
     let create_editor = || {
         container(
-            text_editor(editor_content)
+            TextEditor::new(editor_content)
                 .highlight_with::<highlighter::Highlighter>(
                     highlighter::Settings {
                         theme: highlighter::Theme::InspiredGitHub,
