@@ -67,8 +67,8 @@ pub fn menu_bar<'a>(core: &Core, key_binds: &HashMap<KeyBind, MenuAction>) -> El
                 (
                     fl!("file"),
                     vec![
-                        MenuItem::Button(fl!("open-file"), None, MenuAction::OpenFile),
                         MenuItem::Button(fl!("new-file"), None, MenuAction::NewFile),
+                        MenuItem::Button(fl!("open-file"), None, MenuAction::OpenFile),
                         MenuItem::Button(fl!("save-file"), None, MenuAction::SaveFile),
                     ],
                 ),

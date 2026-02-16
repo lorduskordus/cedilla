@@ -5,10 +5,13 @@ use crate::app::context_page::ContextPage;
 use crate::app::core::utils::{self, CedillaToast};
 use crate::app::widgets::{TextEditor, markdown, sensor, text_editor};
 use crate::config::{AppTheme, CedillaConfig};
+use crate::key_binds::key_binds;
 use crate::{fl, icons};
 use cosmic::app::context_drawer;
-use cosmic::iced::{Alignment, Length, Subscription, highlighter};
-use cosmic::iced_widget::{center, column, row};
+use cosmic::iced::{Alignment, Event, Length, Subscription, highlighter};
+use cosmic::iced_core::keyboard::{Key, Modifiers};
+use cosmic::iced_widget::{center, column, row, tooltip};
+use cosmic::widget::menu::Action;
 use cosmic::widget::{self, about::About, menu};
 use cosmic::widget::{
     Space, ToastId, Toasts, container, pane_grid, responsive, scrollable, text, toaster,
@@ -19,7 +22,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 
-mod app_menu;
+pub mod app_menu;
 mod context_page;
 mod core;
 mod widgets;
@@ -39,6 +42,8 @@ pub struct AppModel {
     about: About,
     /// Key bindings for the application's menu bar.
     key_binds: HashMap<menu::KeyBind, MenuAction>,
+    /// Application Keyboard Modifiers
+    modifiers: Modifiers,
     /// Application configuration handler
     config_handler: Option<cosmic::cosmic_config::Config>,
     /// Configuration data that persists between application runs.
@@ -110,6 +115,10 @@ pub enum Message {
     MenuAction(app_menu::MenuAction),
     /// Needed for responsive menu bar
     Surface(surface::Action),
+    /// Executes the appropiate cosmic binding on keyboard shortcut
+    Key(Modifiers, Key),
+    /// Updates the current state of keyboard modifiers
+    Modifiers(Modifiers),
 
     /// Creates a new empty file
     NewFile,
@@ -147,22 +156,13 @@ impl<'a> markdown::Viewer<'a, cosmic::theme::Theme, cosmic::iced_widget::Rendere
         _alt: &markdown::Text,
     ) -> Element<'a, markdown::MarkdownMessage> {
         match self.images.get(url) {
-            Some(ImageState::Ready(handle)) => {
-                // Display the loaded image
-                widget::image(handle.clone())
-                    .content_fit(cosmic::iced::ContentFit::Contain)
-                    .width(Length::Shrink)
-                    .height(Length::Shrink)
-                    .into()
-            }
-            Some(ImageState::Loading) => {
-                // Show loading placeholder
-                text("Loading image...").into()
-            }
-            Some(ImageState::Failed) => {
-                // Show error state
-                text("Failed to load image").into()
-            }
+            Some(ImageState::Ready(handle)) => widget::image(handle.clone())
+                .content_fit(cosmic::iced::ContentFit::Contain)
+                .width(Length::Shrink)
+                .height(Length::Shrink)
+                .into(),
+            Some(ImageState::Loading) => text("Loading image...").into(),
+            Some(ImageState::Failed) => text("Failed to load image").into(),
             None => sensor(text("Loading..."))
                 .key_ref(url.as_str())
                 .delay(Duration::from_millis(500))
@@ -216,7 +216,8 @@ impl cosmic::Application for AppModel {
             core,
             context_page: ContextPage::default(),
             about,
-            key_binds: HashMap::new(),
+            key_binds: key_binds(),
+            modifiers: Modifiers::empty(),
             config_handler: flags.config_handler,
             config: flags.config,
             app_themes: vec![fl!("match-desktop"), fl!("dark"), fl!("light")],
@@ -245,12 +246,24 @@ impl cosmic::Application for AppModel {
         };
 
         let preview_button = match preview_state {
-            PreviewState::Hidden => widget::button::icon(icons::get_handle("show-symbolic", 18))
-                .on_press(Message::MenuAction(MenuAction::TogglePreview))
-                .class(theme::Button::Icon),
-            PreviewState::Shown => widget::button::icon(icons::get_handle("hide-symbolic", 18))
-                .on_press(Message::MenuAction(MenuAction::TogglePreview))
-                .class(theme::Button::Icon),
+            PreviewState::Hidden => tooltip(
+                widget::button::icon(icons::get_handle("show-symbolic", 18))
+                    .on_press(Message::MenuAction(MenuAction::TogglePreview))
+                    .class(theme::Button::Icon),
+                container(text("Ctrl+H"))
+                    .class(cosmic::theme::Container::Background)
+                    .padding(8.),
+                tooltip::Position::Bottom,
+            ),
+            PreviewState::Shown => tooltip(
+                widget::button::icon(icons::get_handle("hide-symbolic", 18))
+                    .on_press(Message::MenuAction(MenuAction::TogglePreview))
+                    .class(theme::Button::Icon),
+                container(text("Ctrl+H"))
+                    .class(cosmic::theme::Container::Background)
+                    .padding(8.),
+                tooltip::Position::Bottom,
+            ),
         };
 
         vec![container(preview_button).into()]
@@ -303,6 +316,21 @@ impl cosmic::Application for AppModel {
     fn subscription(&self) -> Subscription<Self::Message> {
         // Add subscriptions which are always active.
         let subscriptions = vec![
+            // Watch for key_bind inputs
+            cosmic::iced::event::listen_with(|event, status, _| match event {
+                Event::Keyboard(cosmic::iced::keyboard::Event::KeyPressed {
+                    key,
+                    modifiers,
+                    ..
+                }) => match status {
+                    cosmic::iced::event::Status::Ignored => Some(Message::Key(modifiers, key)),
+                    cosmic::iced::event::Status::Captured => None,
+                },
+                Event::Keyboard(cosmic::iced::keyboard::Event::ModifiersChanged(modifiers)) => {
+                    Some(Message::Modifiers(modifiers))
+                }
+                _ => None,
+            }),
             // Watch for application configuration changes.
             self.core()
                 .watch_config::<CedillaConfig>(Self::APP_ID)
@@ -408,6 +436,18 @@ impl cosmic::Application for AppModel {
             }
             Message::Surface(a) => {
                 cosmic::task::message(cosmic::Action::Cosmic(cosmic::app::Action::Surface(a)))
+            }
+            Message::Key(modifiers, key) => {
+                for (key_bind, action) in self.key_binds.iter() {
+                    if key_bind.matches(modifiers, &key) {
+                        return self.update(action.message());
+                    }
+                }
+                Task::none()
+            }
+            Message::Modifiers(modifiers) => {
+                self.modifiers = modifiers;
+                Task::none()
             }
 
             Message::NewFile => {
