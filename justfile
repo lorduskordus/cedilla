@@ -19,7 +19,7 @@ icon-svg := appid + '.svg'
 
 # Install destinations
 base-dir := absolute_path(clean(rootdir / prefix))
-appdata-dst := base-dir / 'share' / 'appdata' / appdata
+appdata-dst := base-dir / 'share' / 'metainfo' / appdata
 bin-dst := base-dir / 'bin' / name
 desktop-dst := base-dir / 'share' / 'applications' / desktop
 icons-dst := base-dir / 'share' / 'icons' / 'hicolor'
@@ -63,8 +63,8 @@ run *args:
 # Installs files
 install:
     install -Dm0755 {{ cargo-target-dir / 'release' / name }} {{bin-dst}}
-    install -Dm0644 {{ 'resources' / desktop }} {{desktop-dst}}
-    install -Dm0644 {{ 'resources' / appdata }} {{appdata-dst}}
+    install -Dm0644 {{ 'resources' / 'app.desktop' }} {{desktop-dst}}
+    install -Dm0644 {{ 'resources' / 'app.metainfo.xml' }} {{appdata-dst}}
     install -Dm0644 {{ 'resources' / 'icons' / 'hicolor' / 'scalable' / 'apps' / 'icon.svg' }} {{icon-svg-dst}}
 
 # Uninstalls installed files
@@ -93,4 +93,3 @@ tag version:
     git commit -m 'release: {{version}}'
     git commit --amend
     git tag -a {{version}} -m ''
-
