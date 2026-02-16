@@ -1196,43 +1196,43 @@ impl Catalog for Theme {
 }
 
 /// The default style of a [`TextEditor`].
-pub fn default(theme: &Theme, status: Status) -> Style {
+pub fn default(theme: &Theme, _status: Status) -> Style {
     let palette = theme.cosmic();
 
-    let active = Style {
-        background: Background::Color(palette.background.base.into()),
+    Style {
+        background: Background::Color(Color::TRANSPARENT),
         border: Border {
-            radius: 2.0.into(),
-            width: 1.0,
+            radius: 0.0.into(),
+            width: 0.0,
             color: palette.bg_divider().into(),
         },
         icon: palette.on_bg_color().into(),
         placeholder: palette.on_bg_color().into(),
         value: palette.on_bg_color().into(),
         selection: palette.accent.base.into(),
-    };
-
-    match status {
-        Status::Active => active,
-        Status::Hovered => Style {
-            border: Border {
-                color: palette.accent.base.into(),
-                ..active.border
-            },
-            ..active
-        },
-        Status::Focused => Style {
-            border: Border {
-                color: palette.accent.base.into(),
-                width: 2.0,
-                ..active.border
-            },
-            ..active
-        },
-        Status::Disabled => Style {
-            background: Background::Color(palette.background.component.base.into()),
-            value: palette.on_bg_component_color().into(),
-            ..active
-        },
     }
+
+    // match status {
+    //     Status::Active => active,
+    //     Status::Hovered => Style {
+    //         border: Border {
+    //             color: palette.accent.base.into(),
+    //             ..active.border
+    //         },
+    //         ..active
+    //     },
+    //     Status::Focused => Style {
+    //         border: Border {
+    //             color: palette.accent.base.into(),
+    //             width: 2.0,
+    //             ..active.border
+    //         },
+    //         ..active
+    //     },
+    //     Status::Disabled => Style {
+    //         background: Background::Color(palette.background.component.base.into()),
+    //         value: palette.on_bg_component_color().into(),
+    //         ..active
+    //     },
+    // }
 }
