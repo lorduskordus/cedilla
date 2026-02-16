@@ -3,7 +3,7 @@
 use crate::app::app_menu::MenuAction;
 use crate::app::context_page::ContextPage;
 use crate::app::core::utils::{self, CedillaToast};
-use crate::app::widgets::{markdown, sensor};
+use crate::app::widgets::{TextEditor, markdown, sensor, text_editor};
 use crate::config::{AppTheme, CedillaConfig};
 use crate::{fl, icons};
 use cosmic::app::context_drawer;
@@ -11,7 +11,7 @@ use cosmic::iced::{Alignment, Length, Subscription, highlighter};
 use cosmic::iced_widget::{center, column, row};
 use cosmic::widget::{self, about::About, menu};
 use cosmic::widget::{
-    Space, ToastId, Toasts, container, pane_grid, scrollable, text, text_editor, toaster,
+    Space, ToastId, Toasts, container, pane_grid, responsive, scrollable, text, toaster,
 };
 use cosmic::{prelude::*, surface, theme};
 use std::collections::HashMap;
@@ -626,22 +626,27 @@ fn cedilla_main_view<'a>(
     let spacing = theme::active().cosmic().spacing;
 
     let create_editor = || {
-        container(
-            text_editor(editor_content)
-                .highlight_with::<highlighter::Highlighter>(
-                    highlighter::Settings {
-                        theme: highlighter::Theme::InspiredGitHub,
-                        token: path
-                            .as_ref()
-                            .and_then(|path| path.extension()?.to_str())
-                            .unwrap_or("md")
-                            .to_string(),
-                    },
-                    |highlight, _theme| highlight.to_format(),
-                )
-                .on_action(Message::Edit)
-                .height(Length::Fill),
-        )
+        container(responsive(|size| {
+            scrollable(
+                TextEditor::new(editor_content)
+                    .highlight_with::<highlighter::Highlighter>(
+                        highlighter::Settings {
+                            theme: highlighter::Theme::InspiredGitHub,
+                            token: path
+                                .as_ref()
+                                .and_then(|path| path.extension()?.to_str())
+                                .unwrap_or("md")
+                                .to_string(),
+                        },
+                        |highlight, _theme| highlight.to_format(),
+                    )
+                    .padding(0)
+                    //.placeholder("Write something here...")
+                    .on_action(Message::Edit),
+            )
+            .height(Length::Fixed(size.height - 5.)) // This is a bit of a workaround but it works
+            .into()
+        }))
         .padding([5, spacing.space_xxs])
         .width(Length::Fill)
         .height(Length::Fill)

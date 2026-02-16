@@ -5,3 +5,6 @@ pub use markdown::view as markdown;
 
 pub mod sensor;
 pub use sensor::sensor;
+
+pub mod text_editor;
+pub use text_editor::TextEditor;
