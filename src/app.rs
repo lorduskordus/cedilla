@@ -818,24 +818,7 @@ fn cedilla_main_view<'a>(
                         |highlight, _theme| highlight.to_format(),
                     )
                     .padding(0)
-                    //.placeholder("Write something here...")
-                    .on_action(Message::Edit), // .key_binding(|key_press| {
-                                               //     let modifiers = key_press.modifiers;
-                                               //     match key_press.key.as_ref() {
-                                               //         cosmic::iced_core::keyboard::Key::Character("z")
-                                               //             if modifiers.command() && modifiers.shift() =>
-                                               //         {
-                                               //             Some(text_editor::Binding::Custom(Message::Redo))
-                                               //         }
-                                               //         cosmic::iced_core::keyboard::Key::Character("z")
-                                               //             if modifiers.command() =>
-                                               //         {
-                                               //             Some(text_editor::Binding::Custom(Message::Undo))
-                                               //         }
-                                               //         // Fall through to default bindings for everything else
-                                               //         _ => text_editor::Binding::from_key_press(key_press),
-                                               //     }
-                                               // }),
+                    .on_action(Message::Edit),
             )
             .height(Length::Fixed(size.height - 5.)) // This is a bit of a workaround but it works
             .into()
