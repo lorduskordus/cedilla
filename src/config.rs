@@ -17,6 +17,7 @@ const CONFIG_VERSION: u64 = 1;
 pub struct CedillaConfig {
     pub app_theme: AppTheme,
     pub show_helper_header_bar: ShowState,
+    pub show_status_bar: ShowState,
 }
 
 impl CedillaConfig {
@@ -99,5 +100,7 @@ pub enum ConfigInput {
     /// Update the application theme
     UpdateTheme(usize),
     /// Update the help bar show state
-    UpdateHelperHeaderBarShowState(ShowState),
+    HelperHeaderBarShowState(ShowState),
+    /// Update the status bar show state
+    StatusBarShowState(ShowState),
 }

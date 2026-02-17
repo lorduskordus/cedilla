@@ -15,6 +15,7 @@ light = Light
 <#-- Settings Context Page -->
 general = General
 help-bar = Editor Help Bar
+status-bar = Status Bar
 show = Show
 hide = Hide
 

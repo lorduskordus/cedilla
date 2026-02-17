@@ -617,7 +617,7 @@ impl cosmic::Application for AppModel {
                     }
                     Task::none()
                 }
-                ConfigInput::UpdateHelperHeaderBarShowState(show_state) => {
+                ConfigInput::HelperHeaderBarShowState(show_state) => {
                     if let Some(handler) = &self.config_handler {
                         if let Err(err) =
                             self.config.set_show_helper_header_bar(handler, show_state)
@@ -626,6 +626,18 @@ impl cosmic::Application for AppModel {
                             // even if it fails we update the config (it won't get saved after restart)
                             let mut old_config = self.config.clone();
                             old_config.show_helper_header_bar = show_state;
+                            self.config = old_config;
+                        }
+                    }
+                    Task::none()
+                }
+                ConfigInput::StatusBarShowState(show_state) => {
+                    if let Some(handler) = &self.config_handler {
+                        if let Err(err) = self.config.set_show_status_bar(handler, show_state) {
+                            eprintln!("{err}");
+                            // even if it fails we update the config (it won't get saved after restart)
+                            let mut old_config = self.config.clone();
+                            old_config.show_status_bar = show_state;
                             self.config = old_config;
                         }
                     }
@@ -668,13 +680,24 @@ impl AppModel {
                 )
                 .into(),
             widget::settings::section()
-                .title(fl!("general"))
+                .title(fl!("view"))
                 .add(
                     widget::settings::item::builder(fl!("help-bar")).control(widget::dropdown(
                         ShowState::all_labels(),
                         Some(self.config.show_helper_header_bar.to_index()),
                         |index| {
-                            Message::ConfigInput(ConfigInput::UpdateHelperHeaderBarShowState(
+                            Message::ConfigInput(ConfigInput::HelperHeaderBarShowState(
+                                ShowState::from_index(index),
+                            ))
+                        },
+                    )),
+                )
+                .add(
+                    widget::settings::item::builder(fl!("status-bar")).control(widget::dropdown(
+                        ShowState::all_labels(),
+                        Some(self.config.show_status_bar.to_index()),
+                        |index| {
+                            Message::ConfigInput(ConfigInput::StatusBarShowState(
                                 ShowState::from_index(index),
                             ))
                         },
@@ -795,7 +818,7 @@ fn cedilla_main_view<'a>(
         .into()
     };
 
-    let status_bar = {
+    let status_bar: Element<Message> = {
         let file_path = match path.as_deref().and_then(Path::to_str) {
             Some(path) => text(path).size(12),
             None => text(fl!("new-file")).size(12),
@@ -824,6 +847,7 @@ fn cedilla_main_view<'a>(
         )
         .width(Length::Fill)
         .class(theme::Container::Card)
+        .into()
     };
 
     let helper_header_bar = {
@@ -863,10 +887,16 @@ fn cedilla_main_view<'a>(
     };
 
     let content_column = match app_config.show_helper_header_bar {
-        ShowState::Show => column![helper_header_bar, main_content, status_bar],
-        ShowState::Hide => column![main_content, status_bar],
+        ShowState::Show => column![helper_header_bar, main_content],
+        ShowState::Hide => column![main_content],
     }
     .spacing(spacing.space_xxxs);
+
+    let content_column = if let ShowState::Show = &app_config.show_status_bar {
+        content_column.extend([status_bar])
+    } else {
+        content_column
+    };
 
     container(content_column)
         .padding(spacing.space_xxs)

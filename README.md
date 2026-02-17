@@ -30,7 +30,8 @@ This is a WIP project that may or may not be released eventually.
 - [X] Support rules 
 - [X] Config support 
 - [ ] Add vault/project sidebar
-- [ ] Helper headerbar with options to format text 
+- [ ] Ctrl-Z
+- [X] Helper headerbar with options to format text 
 - [ ] Optional scrollbar sync
 - [ ] Support html 
 - [ ] PDF Exporting
