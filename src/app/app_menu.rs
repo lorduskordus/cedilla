@@ -26,6 +26,10 @@ pub enum MenuAction {
     SaveFile,
     /// Toggle the preview for the current file
     TogglePreview,
+    /// Undo
+    Undo,
+    /// Redo
+    Redo,
 }
 
 impl menu::action::MenuAction for MenuAction {
@@ -39,6 +43,8 @@ impl menu::action::MenuAction for MenuAction {
             MenuAction::NewFile => Message::MenuAction(MenuAction::NewFile),
             MenuAction::SaveFile => Message::MenuAction(MenuAction::SaveFile),
             MenuAction::TogglePreview => Message::MenuAction(MenuAction::TogglePreview),
+            MenuAction::Undo => Message::MenuAction(MenuAction::Undo),
+            MenuAction::Redo => Message::MenuAction(MenuAction::Redo),
         }
     }
 }
@@ -70,6 +76,13 @@ pub fn menu_bar<'a>(core: &Core, key_binds: &HashMap<KeyBind, MenuAction>) -> El
                         MenuItem::Button(fl!("new-file"), None, MenuAction::NewFile),
                         MenuItem::Button(fl!("open-file"), None, MenuAction::OpenFile),
                         MenuItem::Button(fl!("save-file"), None, MenuAction::SaveFile),
+                    ],
+                ),
+                (
+                    fl!("edit"),
+                    vec![
+                        MenuItem::Button(fl!("undo"), None, MenuAction::Undo),
+                        MenuItem::Button(fl!("redo"), None, MenuAction::Redo),
                     ],
                 ),
                 (

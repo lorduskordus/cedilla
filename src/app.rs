@@ -73,6 +73,10 @@ enum State {
         panes: pane_grid::State<PaneContent>,
         /// Controls if the preview is hidden or not
         preview_state: PreviewState,
+        /// snapshots of text (needed for ctrl-z)
+        history: Vec<String>,
+        /// current position in history
+        history_index: usize,
     },
 }
 
@@ -139,6 +143,10 @@ pub enum Message {
     ImageLoaded(markdown::Url, Result<widget::image::Handle, String>),
     /// Apply formatting to selected text
     ApplyFormatting(utils::SelectionAction),
+    /// Undo requested
+    Undo,
+    /// Redo requested
+    Redo,
 
     /// Callback after input on the Config [`ContextPage`]
     ConfigInput(ConfigInput),
@@ -296,6 +304,7 @@ impl cosmic::Application for AppModel {
                 is_dirty,
                 panes,
                 preview_state,
+                ..
             } => cedilla_main_view(
                 &self.config,
                 path,
@@ -416,6 +425,8 @@ impl cosmic::Application for AppModel {
                         }
                         Task::none()
                     }
+                    MenuAction::Undo => self.update(Message::Undo),
+                    MenuAction::Redo => self.update(Message::Redo),
                 }
             }
             Message::Surface(a) => {
@@ -447,6 +458,8 @@ impl cosmic::Application for AppModel {
                     is_dirty: true,
                     panes,
                     preview_state: PreviewState::Shown,
+                    history: Vec::new(),
+                    history_index: 0,
                 };
                 Task::none()
             }
@@ -503,6 +516,8 @@ impl cosmic::Application for AppModel {
                         is_dirty: false,
                         panes,
                         preview_state: PreviewState::Shown,
+                        history: vec![content.to_string()],
+                        history_index: 0,
                     };
                     Task::none()
                 }
@@ -513,15 +528,33 @@ impl cosmic::Application for AppModel {
                     editor_content,
                     is_dirty,
                     items,
+                    history,
+                    history_index,
                     ..
                 } = &mut self.state
                 else {
                     return Task::none();
                 };
 
-                *is_dirty = *is_dirty || action.is_edit();
+                let was_edit = action.is_edit();
                 editor_content.perform(action);
                 *items = markdown::parse(editor_content.text().as_ref()).collect();
+
+                if was_edit {
+                    *is_dirty = true;
+                    let current_text = editor_content.text();
+
+                    history.truncate(*history_index + 1);
+                    history.push(current_text);
+                    *history_index = history.len() - 1;
+
+                    // keep only the last 100 snapshots
+                    if history.len() > 100 {
+                        history.remove(0);
+                    } else {
+                        *history_index = history.len() - 1;
+                    }
+                }
 
                 Task::none()
             }
@@ -594,6 +627,48 @@ impl cosmic::Application for AppModel {
                 Task::none()
             }
             Message::ApplyFormatting(action) => self.apply_formatting_to_selection(action),
+            Message::Undo => {
+                let State::Ready {
+                    editor_content,
+                    is_dirty,
+                    items,
+                    history,
+                    history_index,
+                    ..
+                } = &mut self.state
+                else {
+                    return Task::none();
+                };
+
+                if *history_index > 0 {
+                    *history_index -= 1;
+                    let snapshot = history[*history_index].clone();
+                    *editor_content = text_editor::Content::with_text(&snapshot);
+                    *items = markdown::parse(&snapshot).collect();
+                    *is_dirty = *history_index != 0;
+                }
+                Task::none()
+            }
+            Message::Redo => {
+                let State::Ready {
+                    editor_content,
+                    items,
+                    history,
+                    history_index,
+                    ..
+                } = &mut self.state
+                else {
+                    return Task::none();
+                };
+
+                if *history_index + 1 < history.len() {
+                    *history_index += 1;
+                    let snapshot = history[*history_index].clone();
+                    *editor_content = text_editor::Content::with_text(&snapshot);
+                    *items = markdown::parse(&snapshot).collect();
+                }
+                Task::none()
+            }
 
             #[allow(clippy::collapsible_if)]
             Message::ConfigInput(input) => match input {
@@ -744,7 +819,23 @@ fn cedilla_main_view<'a>(
                     )
                     .padding(0)
                     //.placeholder("Write something here...")
-                    .on_action(Message::Edit),
+                    .on_action(Message::Edit), // .key_binding(|key_press| {
+                                               //     let modifiers = key_press.modifiers;
+                                               //     match key_press.key.as_ref() {
+                                               //         cosmic::iced_core::keyboard::Key::Character("z")
+                                               //             if modifiers.command() && modifiers.shift() =>
+                                               //         {
+                                               //             Some(text_editor::Binding::Custom(Message::Redo))
+                                               //         }
+                                               //         cosmic::iced_core::keyboard::Key::Character("z")
+                                               //             if modifiers.command() =>
+                                               //         {
+                                               //             Some(text_editor::Binding::Custom(Message::Undo))
+                                               //         }
+                                               //         // Fall through to default bindings for everything else
+                                               //         _ => text_editor::Binding::from_key_press(key_press),
+                                               //     }
+                                               // }),
             )
             .height(Length::Fixed(size.height - 5.)) // This is a bit of a workaround but it works
             .into()

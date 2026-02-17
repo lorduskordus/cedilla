@@ -25,5 +25,9 @@ open-file = Open File
 new-file = New File
 save-file = Save File
 
+edit = Edit
+undo = Undo
+redo = Redo
+
 editor = Editor
 preview = Preview
