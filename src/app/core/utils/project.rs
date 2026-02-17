@@ -108,7 +108,6 @@ impl AppModel {
                         let folder_pos = self.nav_model.position(nav_id).unwrap_or(0);
                         let folder_indent = self.nav_model.indent(nav_id).unwrap_or(0);
 
-                        // Collect all child indents first to avoid borrow conflict
                         let children: Vec<(u16, u16)> = self
                             .nav_model
                             .iter()
