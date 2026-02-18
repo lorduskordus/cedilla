@@ -9,6 +9,8 @@ use crate::{app::Message, fl};
 pub enum DialogPage {
     /// Dialog for creating a new file on the vault
     NewVaultFile(String),
+    /// Dialog for creating a new folder on the vault
+    NewVaultFolder(String),
 }
 
 impl DialogPage {
@@ -42,6 +44,31 @@ impl DialogPage {
                     ])
                     .spacing(spacing.space_xxs),
                 ),
+            DialogPage::NewVaultFolder(folder_name) => widget::dialog()
+                .title(fl!("new-folder"))
+                .primary_action(
+                    widget::button::suggested(fl!("create"))
+                        .on_press(Message::DialogAction(DialogAction::DialogComplete)),
+                )
+                .secondary_action(
+                    widget::button::standard(fl!("cancel"))
+                        .on_press(Message::DialogAction(DialogAction::DialogCancel)),
+                )
+                .control(
+                    widget::column::with_children(vec![
+                        widget::text::body(fl!("folder-name")).into(),
+                        widget::text_input("", folder_name.as_str())
+                            .id(dialog_state.dialog_text_input.clone())
+                            .on_input(move |name| {
+                                Message::DialogAction(DialogAction::DialogUpdate(
+                                    DialogPage::NewVaultFolder(name),
+                                ))
+                            })
+                            .on_submit(|_x| Message::DialogAction(DialogAction::DialogComplete))
+                            .into(),
+                    ])
+                    .spacing(spacing.space_xxs),
+                ),
         };
 
         Some(dialog.into())
@@ -53,6 +80,8 @@ impl DialogPage {
 pub enum DialogAction {
     /// Asks to open the [`DialogPage`] for creating a new vault file
     OpenNewVaultFileDialog,
+    /// Asks to open the [`DialogPage`] for creating a new vault folder
+    OpenNewVaultFolderDialog,
     /// Action after user confirms/ok's/accepts the action of a Dialog
     DialogComplete,
     /// Action after user cancels the action of a Dialog
@@ -73,6 +102,10 @@ impl DialogAction {
                 dialog_pages.push_back(DialogPage::NewVaultFile(String::new()));
                 widget::text_input::focus(dialog_state.dialog_text_input.clone())
             }
+            DialogAction::OpenNewVaultFolderDialog => {
+                dialog_pages.push_back(DialogPage::NewVaultFolder(String::new()));
+                widget::text_input::focus(dialog_state.dialog_text_input.clone())
+            }
             DialogAction::DialogComplete => {
                 if let Some(dialog_page) = dialog_pages.pop_front() {
                     match dialog_page {
@@ -80,6 +113,13 @@ impl DialogAction {
                             if !file_name.is_empty() {
                                 return Task::done(cosmic::action::app(Message::NewVaultFile(
                                     file_name,
+                                )));
+                            }
+                        }
+                        DialogPage::NewVaultFolder(folder_name) => {
+                            if !folder_name.is_empty() {
+                                return Task::done(cosmic::action::app(Message::NewVaultFolder(
+                                    folder_name,
                                 )));
                             }
                         }

@@ -8,6 +8,7 @@ support = Support
 create = Create
 cancel = Cancel
 file-name = File Name
+folder-name = Folder Name
 
 <#-- Appearance -->
 appearance = Appearance
@@ -27,6 +28,7 @@ hide = Hide
 file = File
 open-file = Open File
 new-file = New File
+new-folder = New Folder
 new-vault-file = New Vault File
 save-file = Save File
 

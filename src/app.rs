@@ -140,6 +140,8 @@ pub enum Message {
     NewFile,
     /// Creates a new markdown file in the vault
     NewVaultFile(String),
+    /// Creates a new folder in the vault
+    NewVaultFolder(String),
     /// Save the current file
     SaveFile,
     /// Callback after opening a new file
@@ -545,6 +547,9 @@ impl cosmic::Application for AppModel {
                     MenuAction::NewVaultFile => self.update(Message::DialogAction(
                         dialogs::DialogAction::OpenNewVaultFileDialog,
                     )),
+                    MenuAction::NewVaultFolder => self.update(Message::DialogAction(
+                        dialogs::DialogAction::OpenNewVaultFolderDialog,
+                    )),
                     MenuAction::SaveFile => self.update(Message::SaveFile),
                     MenuAction::TogglePreview => {
                         match preview_state {
@@ -601,7 +606,7 @@ impl cosmic::Application for AppModel {
             Message::NewVaultFile(file_name) => {
                 let dir = self.selected_directory();
 
-                // find a name that doesn't already exist (TODO: Let the user input a name on a dialog or smth)
+                // find a name that doesn't already exist
                 let file_path = {
                     let base = dir.join(format!("{}.md", file_name));
                     if !base.exists() {
@@ -631,7 +636,7 @@ impl cosmic::Application for AppModel {
                 panes.split(pane_grid::Axis::Vertical, first_pane, PaneContent::Preview);
 
                 self.state = State::Ready {
-                    path: None,
+                    path: Some(file_path),
                     editor_content: text_editor::Content::new(),
                     markdown_images: HashMap::new(),
                     items: vec![],
@@ -641,6 +646,35 @@ impl cosmic::Application for AppModel {
                     history: Vec::new(),
                     history_index: 0,
                 };
+
+                Task::none()
+            }
+            Message::NewVaultFolder(folder_name) => {
+                let dir = self.selected_directory();
+
+                let folder_path = {
+                    let base = dir.join(&folder_name);
+                    if !base.exists() {
+                        base
+                    } else {
+                        let mut i = 1;
+                        loop {
+                            let candidate = dir.join(format!("{}-{}", folder_name, i));
+                            if !candidate.exists() {
+                                break candidate;
+                            }
+                            i += 1;
+                        }
+                    }
+                };
+
+                // create the file on disk
+                if let Err(e) = std::fs::create_dir(&folder_path) {
+                    return self.update(Message::AddToast(CedillaToast::new(e)));
+                }
+
+                // insert folder to navbar
+                self.insert_folder_node(&folder_path, &dir);
 
                 Task::none()
             }

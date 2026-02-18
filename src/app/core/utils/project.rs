@@ -143,6 +143,59 @@ impl AppModel {
             .data(node);
     }
 
+    pub fn insert_folder_node(&mut self, folder_path: &PathBuf, parent_dir: &PathBuf) {
+        let Ok(node) = ProjectNode::new(folder_path) else {
+            return;
+        };
+
+        let (insert_position, insert_indent) = {
+            let mut pos = 0u16;
+            let mut indent = 1u16;
+            for nav_id in self.nav_model.iter() {
+                #[allow(clippy::collapsible_if)]
+                if let Some(ProjectNode::Folder { path, .. }) =
+                    self.nav_model.data::<ProjectNode>(nav_id)
+                {
+                    if *path == *parent_dir {
+                        let folder_pos = self.nav_model.position(nav_id).unwrap_or(0);
+                        let folder_indent = self.nav_model.indent(nav_id).unwrap_or(0);
+
+                        let children: Vec<(u16, u16)> = self
+                            .nav_model
+                            .iter()
+                            .filter_map(|child_id| {
+                                let child_pos = self.nav_model.position(child_id)?;
+                                let child_indent = self.nav_model.indent(child_id)?;
+                                Some((child_pos, child_indent))
+                            })
+                            .collect();
+
+                        // Insert before files (folders come first) but after existing subfolders
+                        let mut insert_at = folder_pos + 1;
+                        for (child_pos, child_indent) in &children {
+                            if *child_pos == insert_at && *child_indent > folder_indent {
+                                insert_at += 1;
+                            }
+                        }
+
+                        pos = insert_at;
+                        indent = folder_indent + 1;
+                        break;
+                    }
+                }
+            }
+            (pos, indent)
+        };
+
+        self.nav_model
+            .insert()
+            .position(insert_position)
+            .indent(insert_indent)
+            .icon(node.icon(16))
+            .text(node.name().to_string())
+            .data(node);
+    }
+
     pub fn selected_directory(&self) -> PathBuf {
         self.selected_nav_path
             .clone()
