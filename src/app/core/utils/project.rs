@@ -160,20 +160,26 @@ impl AppModel {
                         let folder_pos = self.nav_model.position(nav_id).unwrap_or(0);
                         let folder_indent = self.nav_model.indent(nav_id).unwrap_or(0);
 
-                        let children: Vec<(u16, u16)> = self
+                        let children: Vec<(u16, u16, bool)> = self
                             .nav_model
                             .iter()
                             .filter_map(|child_id| {
                                 let child_pos = self.nav_model.position(child_id)?;
                                 let child_indent = self.nav_model.indent(child_id)?;
-                                Some((child_pos, child_indent))
+                                let is_file = matches!(
+                                    self.nav_model.data::<ProjectNode>(child_id),
+                                    Some(ProjectNode::File { .. })
+                                );
+                                Some((child_pos, child_indent, is_file))
                             })
                             .collect();
 
-                        // Insert before files (folders come first) but after existing subfolders
                         let mut insert_at = folder_pos + 1;
-                        for (child_pos, child_indent) in &children {
+                        for (child_pos, child_indent, is_file) in &children {
                             if *child_pos == insert_at && *child_indent > folder_indent {
+                                if *is_file {
+                                    break;
+                                }
                                 insert_at += 1;
                             }
                         }
