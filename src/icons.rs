@@ -38,6 +38,7 @@ impl IconCache {
 
         bundle!("show-symbolic", 18);
         bundle!("hide-symbolic", 18);
+        bundle!("markdown-symbolic", 18);
 
         bundle!("helperbar/bold-symbolic", 18);
         bundle!("helperbar/bulleted-list-symbolic", 18);

@@ -27,7 +27,7 @@ impl AppModel {
             let id = self
                 .nav_model
                 .insert()
-                .icon(node.icon(16))
+                .icon(node.icon(18))
                 .text("Cedilla Vault")
                 .data(node)
                 .id();
@@ -65,7 +65,7 @@ impl AppModel {
                 .insert()
                 .position(position)
                 .indent(indent)
-                .icon(node.icon(16))
+                .icon(node.icon(18))
                 .text(node.name().to_string())
                 .data(node);
             position += 1;
@@ -138,7 +138,7 @@ impl AppModel {
             .insert()
             .position(insert_position)
             .indent(insert_indent)
-            .icon(node.icon(16))
+            .icon(node.icon(18))
             .text(node.name().to_string())
             .data(node);
     }
