@@ -7,8 +7,11 @@ support = Support
 
 create = Create
 cancel = Cancel
+delete = Delete
 file-name = File Name
 folder-name = Folder Name
+delete-node = Delete File/Folder
+delete-confirmation = Are you sure you want to delete this file/folder and it's contents?
 
 <#-- Appearance -->
 appearance = Appearance

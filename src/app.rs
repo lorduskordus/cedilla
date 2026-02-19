@@ -158,6 +158,8 @@ pub enum Message {
     Edit(text_editor::Action),
     /// Callback after saving the current file
     FileSaved(Result<PathBuf, anywho::Error>),
+    /// Deletes the given node entity of the navbar folder or file
+    DeleteNode(cosmic::widget::segmented_button::Entity),
 
     /// Pane grid resized callback
     PaneResized(pane_grid::ResizeEvent),
@@ -655,39 +657,9 @@ impl cosmic::Application for AppModel {
             Message::NavMenuAction(action) => {
                 self.nav_bar_context_id = segmented_button::Entity::null();
                 match action {
-                    NavMenuAction::DeleteFile(entity) => {
-                        let Some(node) = self.nav_model.data::<ProjectNode>(entity).cloned() else {
-                            return Task::none();
-                        };
-
-                        let path = match &node {
-                            ProjectNode::File { path, .. } => path.clone(),
-                            ProjectNode::Folder { path, .. } => path.clone(),
-                        };
-
-                        let delete_result = match &node {
-                            ProjectNode::File { .. } => std::fs::remove_file(&path),
-                            ProjectNode::Folder { .. } => std::fs::remove_dir_all(&path),
-                        };
-
-                        if let Err(e) = delete_result {
-                            return self.update(Message::AddToast(CedillaToast::new(e)));
-                        }
-
-                        // remove from nav model
-                        self.remove_nav_node(&path);
-
-                        // if the deleted file was currently open, create a new empty file
-                        if let State::Ready {
-                            path: open_path, ..
-                        } = &self.state
-                            && open_path.as_deref() == Some(&path)
-                        {
-                            return self.update(Message::NewFile);
-                        }
-
-                        Task::none()
-                    }
+                    NavMenuAction::DeleteFile(entity) => self.update(Message::DialogAction(
+                        dialogs::DialogAction::OpenDeleteNodeDialog(entity),
+                    )),
                 }
             }
 
@@ -895,6 +867,39 @@ impl cosmic::Application for AppModel {
                 }
                 Err(e) => self.update(Message::AddToast(CedillaToast::new(e))),
             },
+            Message::DeleteNode(entity) => {
+                let Some(node) = self.nav_model.data::<ProjectNode>(entity).cloned() else {
+                    return Task::none();
+                };
+
+                let path = match &node {
+                    ProjectNode::File { path, .. } => path.clone(),
+                    ProjectNode::Folder { path, .. } => path.clone(),
+                };
+
+                let delete_result = match &node {
+                    ProjectNode::File { .. } => std::fs::remove_file(&path),
+                    ProjectNode::Folder { .. } => std::fs::remove_dir_all(&path),
+                };
+
+                if let Err(e) = delete_result {
+                    return self.update(Message::AddToast(CedillaToast::new(e)));
+                }
+
+                // remove from nav model
+                self.remove_nav_node(&path);
+
+                // if the deleted file was currently open, create a new empty file
+                if let State::Ready {
+                    path: open_path, ..
+                } = &self.state
+                    && open_path.as_deref() == Some(&path)
+                {
+                    return self.update(Message::NewFile);
+                }
+
+                Task::none()
+            }
 
             Message::PaneResized(event) => {
                 let State::Ready { panes, .. } = &mut self.state else {

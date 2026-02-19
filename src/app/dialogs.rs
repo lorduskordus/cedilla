@@ -11,6 +11,8 @@ pub enum DialogPage {
     NewVaultFile(String),
     /// Dialog for creating a new folder on the vault
     NewVaultFolder(String),
+    /// Delete the currently selected folder/file
+    DeleteNode(cosmic::widget::segmented_button::Entity),
 }
 
 impl DialogPage {
@@ -69,6 +71,22 @@ impl DialogPage {
                     ])
                     .spacing(spacing.space_xxs),
                 ),
+            DialogPage::DeleteNode(_entity) => widget::dialog()
+                .title(fl!("delete-node"))
+                .primary_action(
+                    widget::button::suggested(fl!("delete"))
+                        .on_press(Message::DialogAction(DialogAction::DialogComplete)),
+                )
+                .secondary_action(
+                    widget::button::standard(fl!("cancel"))
+                        .on_press(Message::DialogAction(DialogAction::DialogCancel)),
+                )
+                .control(
+                    widget::column::with_children(vec![
+                        widget::text::body(fl!("delete-confirmation")).into(),
+                    ])
+                    .spacing(spacing.space_xxs),
+                ),
         };
 
         Some(dialog.into())
@@ -82,6 +100,8 @@ pub enum DialogAction {
     OpenNewVaultFileDialog,
     /// Asks to open the [`DialogPage`] for creating a new vault folder
     OpenNewVaultFolderDialog,
+    /// Asks to open the [`DialogPage`] for deleting a vault folder/file
+    OpenDeleteNodeDialog(cosmic::widget::segmented_button::Entity),
     /// Action after user confirms/ok's/accepts the action of a Dialog
     DialogComplete,
     /// Action after user cancels the action of a Dialog
@@ -123,6 +143,9 @@ impl DialogAction {
                                 )));
                             }
                         }
+                        DialogPage::DeleteNode(entity) => {
+                            return Task::done(cosmic::action::app(Message::DeleteNode(entity)));
+                        }
                     }
                 }
                 Task::none()
@@ -133,6 +156,10 @@ impl DialogAction {
             }
             DialogAction::DialogUpdate(dialog_page) => {
                 dialog_pages[0] = dialog_page;
+                Task::none()
+            }
+            DialogAction::OpenDeleteNodeDialog(entity) => {
+                dialog_pages.push_back(DialogPage::DeleteNode(entity));
                 Task::none()
             }
         }
