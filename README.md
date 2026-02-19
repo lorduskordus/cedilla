@@ -11,7 +11,7 @@
 <h3>A markdown text editor for the COSMIC™ desktop</h3>
 
 <img src="./resources/screenshots/main-gif-light.gif" width=650>
-<!--<img src="./resources/screenshots/main-light.png" width=350>-->
+<img src="./resources/screenshots/second-gif-light.gif" width=650>
 
 <br><br>
 
@@ -29,7 +29,7 @@ This is a WIP project that may or may not be released eventually.
 - [X] Support tables
 - [X] Support rules 
 - [X] Config support 
-- [ ] Add vault/project sidebar
+- [X] Add vault/project sidebar
 - [X] Ctrl-Z
 - [X] Helper headerbar with options to format text 
 - [ ] Optional scrollbar sync

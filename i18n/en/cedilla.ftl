@@ -5,6 +5,18 @@ view = View
 loading = Loading
 support = Support
 
+create = Create
+cancel = Cancel
+delete = Delete
+rename = Rename
+move = Move
+move-to = Move To
+name = Name
+file-name = File Name
+folder-name = Folder Name
+delete-node = Delete File/Folder
+delete-confirmation = Are you sure you want to delete this file/folder and it's contents?
+
 <#-- Appearance -->
 appearance = Appearance
 theme = Theme
@@ -23,6 +35,8 @@ hide = Hide
 file = File
 open-file = Open File
 new-file = New File
+new-folder = New Folder
+new-vault-file = New Vault File
 save-file = Save File
 
 edit = Edit

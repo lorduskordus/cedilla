@@ -2,22 +2,26 @@
 
 use crate::app::app_menu::MenuAction;
 use crate::app::context_page::ContextPage;
+use crate::app::core::utils::project::ProjectNode;
 use crate::app::core::utils::{self, CedillaToast};
+use crate::app::dialogs::{DialogPage, DialogState};
 use crate::app::widgets::{TextEditor, markdown, sensor, text_editor};
 use crate::config::{AppTheme, CedillaConfig, ConfigInput, ShowState};
 use crate::key_binds::key_binds;
 use crate::{fl, icons};
 use cosmic::app::context_drawer;
-use cosmic::iced::{Alignment, Event, Length, Subscription, highlighter};
+use cosmic::iced::{Alignment, Event, Length, Padding, Subscription, highlighter};
 use cosmic::iced_core::keyboard::{Key, Modifiers};
 use cosmic::iced_widget::{center, column, row, tooltip};
 use cosmic::widget::menu::Action;
 use cosmic::widget::{self, about::About, menu};
 use cosmic::widget::{
-    Space, ToastId, Toasts, button, container, pane_grid, responsive, scrollable, text, toaster,
+    Space, ToastId, Toasts, button, container, nav_bar, pane_grid, responsive, scrollable,
+    segmented_button, text, toaster,
 };
 use cosmic::{prelude::*, surface, theme};
-use std::collections::HashMap;
+use slotmap::Key as SlotMapKey;
+use std::collections::{HashMap, VecDeque};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
@@ -25,6 +29,7 @@ use std::time::Duration;
 pub mod app_menu;
 mod context_page;
 mod core;
+mod dialogs;
 mod widgets;
 
 const REPOSITORY: &str = env!("CARGO_PKG_REPOSITORY");
@@ -36,6 +41,14 @@ pub struct AppModel {
     toasts: Toasts<Message>,
     /// Application state which is managed by the COSMIC runtime.
     core: cosmic::Core,
+    /// Application navbar
+    nav_model: segmented_button::SingleSelectModel,
+    /// Needed for navbar context menu func
+    nav_bar_context_id: segmented_button::Entity,
+    /// Dialog Pages of the Application
+    dialog_pages: VecDeque<DialogPage>,
+    /// Holds the state of the application dialogs
+    dialog_state: DialogState,
     /// Display a context drawer with the designated page if defined.
     context_page: ContextPage,
     /// The about page for this app.
@@ -50,6 +63,8 @@ pub struct AppModel {
     config: CedillaConfig,
     // Application Themes
     app_themes: Vec<String>,
+    /// Currently selected path on the navbar (i need these for accurate file creadtion deletion...)
+    selected_nav_path: Option<PathBuf>,
     /// Application State
     state: State,
 }
@@ -121,9 +136,20 @@ pub enum Message {
     Key(Modifiers, Key),
     /// Updates the current state of keyboard modifiers
     Modifiers(Modifiers),
+    /// Asks to execute various actions related to the application dialogs
+    DialogAction(dialogs::DialogAction),
 
-    /// Creates a new empty file
+    /// Right click on a NavBar Item
+    NavBarContext(segmented_button::Entity),
+    /// Fired when a menu item is chosen
+    NavMenuAction(NavMenuAction),
+
+    /// Creates a new empty file (no path)
     NewFile,
+    /// Creates a new markdown file in the vault
+    NewVaultFile(String),
+    /// Creates a new folder in the vault
+    NewVaultFolder(String),
     /// Save the current file
     SaveFile,
     /// Callback after opening a new file
@@ -132,6 +158,12 @@ pub enum Message {
     Edit(text_editor::Action),
     /// Callback after saving the current file
     FileSaved(Result<PathBuf, anywho::Error>),
+    /// Deletes the given node entity of the navbar folder or file
+    DeleteNode(cosmic::widget::segmented_button::Entity),
+    /// Renames the given node entity of the navbar folder or file
+    RenameNode(cosmic::widget::segmented_button::Entity, String),
+    /// Move one node (to another one)
+    MoveNode(cosmic::widget::segmented_button::Entity, PathBuf),
 
     /// Pane grid resized callback
     PaneResized(pane_grid::ResizeEvent),
@@ -183,6 +215,21 @@ impl<'a> markdown::Viewer<'a, cosmic::theme::Theme, cosmic::iced_widget::Rendere
     }
 }
 
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+#[allow(clippy::enum_variant_names)]
+pub enum NavMenuAction {
+    DeleteNode(segmented_button::Entity),
+    RenameNode(segmented_button::Entity),
+    MoveNode(segmented_button::Entity),
+}
+
+impl cosmic::widget::menu::Action for NavMenuAction {
+    type Message = cosmic::Action<Message>;
+    fn message(&self) -> Self::Message {
+        cosmic::Action::App(Message::NavMenuAction(*self))
+    }
+}
+
 /// Create a COSMIC application from the app model
 impl cosmic::Application for AppModel {
     /// The async executor that will be used to run your application's commands.
@@ -225,15 +272,24 @@ impl cosmic::Application for AppModel {
         let mut app = AppModel {
             toasts: Toasts::new(Message::CloseToast),
             core,
+            nav_model: nav_bar::Model::builder().build(),
+            nav_bar_context_id: segmented_button::Entity::null(),
             context_page: ContextPage::default(),
+            dialog_pages: VecDeque::default(),
+            dialog_state: DialogState::default(),
             about,
             key_binds: key_binds(),
             modifiers: Modifiers::empty(),
             config_handler: flags.config_handler,
             config: flags.config,
             app_themes: vec![fl!("match-desktop"), fl!("dark"), fl!("light")],
+            selected_nav_path: None,
             state: State::Loading,
         };
+
+        // load vault
+        let vault_path = PathBuf::from(&app.config.vault_path);
+        app.open_vault_folder(&vault_path);
 
         // Startup tasks.
         let tasks = vec![
@@ -278,6 +334,169 @@ impl cosmic::Application for AppModel {
         };
 
         vec![container(preview_button).into()]
+    }
+
+    fn nav_bar(&self) -> Option<Element<'_, cosmic::action::Action<Message>>> {
+        if !self.core().nav_bar_active() {
+            return None;
+        }
+
+        let nav_model = self.nav_model()?;
+
+        // if no valid items exist, render nothing
+        nav_model.iter().next()?;
+
+        let cosmic::cosmic_theme::Spacing {
+            space_none,
+            space_s,
+            space_xxxs,
+            ..
+        } = self.core().system_theme().cosmic().spacing;
+
+        let mut nav = segmented_button::vertical(nav_model)
+            .button_height(space_xxxs + 20 /* line height */ + space_xxxs)
+            .button_padding([space_s, space_xxxs, space_s, space_xxxs])
+            .button_spacing(space_xxxs)
+            .on_activate(|entity| cosmic::action::cosmic(cosmic::app::Action::NavBar(entity)))
+            .on_context(|entity| cosmic::Action::App(Message::NavBarContext(entity)))
+            .context_menu(self.nav_context_menu(self.nav_bar_context_id))
+            .spacing(space_none)
+            .style(theme::SegmentedButton::FileNav)
+            .apply(widget::container)
+            .padding(space_s)
+            .width(Length::Shrink);
+
+        if !self.core().is_condensed() {
+            nav = nav.max_width(280);
+        }
+
+        Some(
+            nav.apply(widget::scrollable)
+                .apply(widget::container)
+                .height(Length::Fill)
+                .class(theme::Container::custom(nav_bar::nav_bar_style))
+                .into(),
+        )
+    }
+
+    fn nav_model(&self) -> Option<&nav_bar::Model> {
+        Some(&self.nav_model)
+    }
+
+    fn nav_context_menu(
+        &self,
+        entity: widget::nav_bar::Id,
+    ) -> Option<Vec<widget::menu::Tree<cosmic::Action<Message>>>> {
+        if entity.is_null() {
+            return Some(vec![]);
+        }
+
+        // no context menu for root node
+        if self.nav_model.indent(entity).unwrap_or(0) == 0 {
+            return Some(vec![]);
+        }
+
+        let node = self.nav_model.data::<ProjectNode>(entity)?;
+
+        let mut items = Vec::with_capacity(1);
+
+        match node {
+            ProjectNode::File { .. } => {
+                items.push(cosmic::widget::menu::Item::Button(
+                    fl!("delete"),
+                    None,
+                    NavMenuAction::DeleteNode(entity),
+                ));
+                items.push(cosmic::widget::menu::Item::Button(
+                    fl!("rename"),
+                    None,
+                    NavMenuAction::RenameNode(entity),
+                ));
+                items.push(cosmic::widget::menu::Item::Button(
+                    fl!("move-to"),
+                    None,
+                    NavMenuAction::MoveNode(entity),
+                ));
+            }
+            ProjectNode::Folder { .. } => {
+                items.push(cosmic::widget::menu::Item::Button(
+                    fl!("delete"),
+                    None,
+                    NavMenuAction::DeleteNode(entity),
+                ));
+                items.push(cosmic::widget::menu::Item::Button(
+                    fl!("rename"),
+                    None,
+                    NavMenuAction::RenameNode(entity),
+                ));
+                items.push(cosmic::widget::menu::Item::Button(
+                    fl!("move-to"),
+                    None,
+                    NavMenuAction::MoveNode(entity),
+                ));
+            }
+        }
+
+        Some(cosmic::widget::menu::items(
+            &std::collections::HashMap::new(),
+            items,
+        ))
+    }
+
+    fn on_nav_select(&mut self, id: nav_bar::Id) -> Task<cosmic::Action<Message>> {
+        let node_opt = match self.nav_model.data_mut::<ProjectNode>(id) {
+            Some(node) => {
+                if let ProjectNode::Folder { open, .. } = node {
+                    *open = !*open;
+                }
+                Some(node.clone())
+            }
+            None => None,
+        };
+
+        match node_opt {
+            Some(node) => {
+                self.nav_model.icon_set(id, node.icon(18));
+
+                match node {
+                    ProjectNode::Folder { path, open, .. } => {
+                        // store selected directory
+                        self.selected_nav_path = Some(path.clone());
+
+                        let position = self.nav_model.position(id).unwrap_or(0);
+                        let indent = self.nav_model.indent(id).unwrap_or(0);
+
+                        if open {
+                            self.open_folder(&path, position + 1, indent + 1);
+                        } else {
+                            while let Some(child_id) = self.nav_model.entity_at(position + 1) {
+                                if self.nav_model.indent(child_id).unwrap_or(0) > indent {
+                                    self.nav_model.remove(child_id);
+                                } else {
+                                    break;
+                                }
+                            }
+                        }
+                        Task::none()
+                    }
+                    ProjectNode::File { path, .. } => {
+                        // store parent directory of selected file
+                        self.selected_nav_path = path.parent().map(|p| p.to_path_buf());
+
+                        Task::perform(utils::files::load_file(path), |res| {
+                            cosmic::action::app(Message::OpenFile(res))
+                        })
+                    }
+                }
+            }
+            None => Task::none(),
+        }
+    }
+
+    /// Display a dialog if requested.
+    fn dialog(&self) -> Option<Element<'_, Message>> {
+        let dialog_page = self.dialog_pages.front()?;
+        dialog_page.display(&self.dialog_state)
     }
 
     /// Display a context drawer if the context page is requested.
@@ -417,6 +636,12 @@ impl cosmic::Application for AppModel {
                         },
                     ),
                     MenuAction::NewFile => self.update(Message::NewFile),
+                    MenuAction::NewVaultFile => self.update(Message::DialogAction(
+                        dialogs::DialogAction::OpenNewVaultFileDialog,
+                    )),
+                    MenuAction::NewVaultFolder => self.update(Message::DialogAction(
+                        dialogs::DialogAction::OpenNewVaultFolderDialog,
+                    )),
                     MenuAction::SaveFile => self.update(Message::SaveFile),
                     MenuAction::TogglePreview => {
                         match preview_state {
@@ -444,6 +669,38 @@ impl cosmic::Application for AppModel {
                 self.modifiers = modifiers;
                 Task::none()
             }
+            Message::DialogAction(action) => {
+                let State::Ready { .. } = &mut self.state else {
+                    return Task::none();
+                };
+
+                action.execute(&mut self.dialog_pages, &self.dialog_state)
+            }
+
+            Message::NavBarContext(entity) => {
+                self.nav_bar_context_id = entity;
+                Task::none()
+            }
+            Message::NavMenuAction(action) => {
+                self.nav_bar_context_id = segmented_button::Entity::null();
+                match action {
+                    NavMenuAction::DeleteNode(entity) => self.update(Message::DialogAction(
+                        dialogs::DialogAction::OpenDeleteNodeDialog(entity),
+                    )),
+                    NavMenuAction::RenameNode(entity) => self.update(Message::DialogAction(
+                        dialogs::DialogAction::OpenRenameNodeDialog(entity),
+                    )),
+                    NavMenuAction::MoveNode(entity) => {
+                        let vault_path = PathBuf::from(&self.config.vault_path);
+                        self.dialog_state.available_folders =
+                            self.collect_all_folders(&vault_path, entity);
+
+                        self.update(Message::DialogAction(
+                            dialogs::DialogAction::OpenMoveNodeDialog(entity),
+                        ))
+                    }
+                }
+            }
 
             Message::NewFile => {
                 // Create initial pane configuration with editor on left, preview on right
@@ -463,6 +720,81 @@ impl cosmic::Application for AppModel {
                 };
                 Task::none()
             }
+            Message::NewVaultFile(file_name) => {
+                let dir = self.selected_directory();
+
+                // find a name that doesn't already exist
+                let file_path = {
+                    let base = dir.join(format!("{}.md", file_name));
+                    if !base.exists() {
+                        base
+                    } else {
+                        let mut i = 1;
+                        loop {
+                            let candidate = dir.join(format!("{}-{}.md", file_name, i));
+                            if !candidate.exists() {
+                                break candidate;
+                            }
+                            i += 1;
+                        }
+                    }
+                };
+
+                // create the file on disk
+                if let Err(e) = std::fs::write(&file_path, "") {
+                    return self.update(Message::AddToast(CedillaToast::new(e)));
+                }
+
+                // insert file to navbar
+                self.insert_file_node(&file_path, &dir);
+
+                // Create initial pane configuration with editor on left, preview on right
+                let (mut panes, first_pane) = pane_grid::State::new(PaneContent::Editor);
+                panes.split(pane_grid::Axis::Vertical, first_pane, PaneContent::Preview);
+
+                self.state = State::Ready {
+                    path: Some(file_path),
+                    editor_content: text_editor::Content::new(),
+                    markdown_images: HashMap::new(),
+                    items: vec![],
+                    is_dirty: true,
+                    panes,
+                    preview_state: PreviewState::Shown,
+                    history: Vec::new(),
+                    history_index: 0,
+                };
+
+                Task::none()
+            }
+            Message::NewVaultFolder(folder_name) => {
+                let dir = self.selected_directory();
+
+                let folder_path = {
+                    let base = dir.join(&folder_name);
+                    if !base.exists() {
+                        base
+                    } else {
+                        let mut i = 1;
+                        loop {
+                            let candidate = dir.join(format!("{}-{}", folder_name, i));
+                            if !candidate.exists() {
+                                break candidate;
+                            }
+                            i += 1;
+                        }
+                    }
+                };
+
+                // create the file on disk
+                if let Err(e) = std::fs::create_dir(&folder_path) {
+                    return self.update(Message::AddToast(CedillaToast::new(e)));
+                }
+
+                // insert folder to navbar
+                self.insert_folder_node(&folder_path, &dir);
+
+                Task::none()
+            }
             Message::SaveFile => {
                 let State::Ready {
                     editor_content,
@@ -480,6 +812,7 @@ impl cosmic::Application for AppModel {
 
                 let content = editor_content.text();
                 let path = path.clone();
+                let vault_path = self.config.vault_path.clone();
 
                 Task::perform(
                     async move {
@@ -487,13 +820,15 @@ impl cosmic::Application for AppModel {
                             // We're editing an alreaday existing file
                             Some(path) => Some(utils::files::save_file(path, content).await),
                             // We want to save a new file
-                            None => match utils::files::open_markdown_file_saver().await {
-                                Some(path) => {
-                                    Some(utils::files::save_file(path.into(), content).await)
+                            None => {
+                                match utils::files::open_markdown_file_saver(vault_path).await {
+                                    Some(path) => {
+                                        Some(utils::files::save_file(path.into(), content).await)
+                                    }
+                                    // Error selecting where to save the file
+                                    None => None,
                                 }
-                                // Error selecting where to save the file
-                                None => None,
-                            },
+                            }
                         }
                     },
                     |res| match res {
@@ -571,6 +906,150 @@ impl cosmic::Application for AppModel {
                 }
                 Err(e) => self.update(Message::AddToast(CedillaToast::new(e))),
             },
+            Message::DeleteNode(entity) => {
+                let Some(node) = self.nav_model.data::<ProjectNode>(entity).cloned() else {
+                    return Task::none();
+                };
+
+                let path = match &node {
+                    ProjectNode::File { path, .. } => path.clone(),
+                    ProjectNode::Folder { path, .. } => path.clone(),
+                };
+
+                let delete_result = match &node {
+                    ProjectNode::File { .. } => std::fs::remove_file(&path),
+                    ProjectNode::Folder { .. } => std::fs::remove_dir_all(&path),
+                };
+
+                if let Err(e) = delete_result {
+                    return self.update(Message::AddToast(CedillaToast::new(e)));
+                }
+
+                // remove from nav model
+                self.remove_nav_node(&path);
+
+                // if the deleted file was currently open, create a new empty file
+                if let State::Ready {
+                    path: open_path, ..
+                } = &self.state
+                    && open_path.as_deref() == Some(&path)
+                {
+                    return self.update(Message::NewFile);
+                }
+
+                Task::none()
+            }
+            Message::RenameNode(entity, new_name) => {
+                let Some(node) = self.nav_model.data::<ProjectNode>(entity).cloned() else {
+                    return Task::none();
+                };
+
+                let old_path = match &node {
+                    ProjectNode::File { path, .. } | ProjectNode::Folder { path, .. } => {
+                        path.clone()
+                    }
+                };
+
+                let new_name = match &node {
+                    ProjectNode::File { .. } => {
+                        if new_name.ends_with(".md") {
+                            new_name
+                        } else {
+                            format!("{}.md", new_name)
+                        }
+                    }
+                    ProjectNode::Folder { .. } => new_name,
+                };
+
+                let new_path = match old_path.parent() {
+                    Some(parent) => parent.join(&new_name),
+                    None => return Task::none(),
+                };
+
+                if new_path == old_path {
+                    return Task::none();
+                }
+
+                if new_path.exists() {
+                    return self.update(Message::AddToast(CedillaToast::new(format!(
+                        "A file or folder named {:?} already exists",
+                        new_name
+                    ))));
+                }
+
+                if let Err(e) = std::fs::rename(&old_path, &new_path) {
+                    return self.update(Message::AddToast(CedillaToast::new(e)));
+                }
+
+                self.rename_nav_node(&old_path, &new_path, &new_name);
+
+                // update the open editor state if the open file was inside the renamed path
+                #[allow(clippy::collapsible_if)]
+                if let State::Ready {
+                    path: open_path, ..
+                } = &mut self.state
+                {
+                    if let Some(current) = open_path.as_deref() {
+                        if current.starts_with(&old_path) {
+                            let suffix = current.strip_prefix(&old_path).unwrap().to_path_buf();
+                            *open_path = Some(if suffix == std::path::Path::new("") {
+                                new_path.clone()
+                            } else {
+                                new_path.join(suffix)
+                            });
+                        }
+                    }
+                }
+                Task::none()
+            }
+            Message::MoveNode(source_entity, target_path) => {
+                let source_path = match self.nav_model.data::<ProjectNode>(source_entity) {
+                    Some(ProjectNode::File { path, .. } | ProjectNode::Folder { path, .. }) => {
+                        path.clone()
+                    }
+                    None => return Task::none(),
+                };
+
+                let file_name = match source_path.file_name() {
+                    Some(n) => n,
+                    None => return Task::none(),
+                };
+                let dest = target_path.join(file_name);
+
+                if source_path == target_path || dest == source_path {
+                    return Task::none();
+                }
+
+                if let Err(e) = std::fs::rename(&source_path, &dest) {
+                    return self.update(Message::AddToast(CedillaToast::new(e)));
+                }
+
+                let target_entity = self.nav_model.iter().find(|&id| {
+                    matches!(
+                        self.nav_model.data::<ProjectNode>(id),
+                        Some(ProjectNode::Folder { path, .. }) if *path == target_path
+                    )
+                });
+
+                if let Some(target_entity) = target_entity {
+                    self.move_nav_node(source_entity, target_entity, &dest);
+                } else {
+                    // target folder was never opened, reload from disk
+                    let vault_path = PathBuf::from(&self.config.vault_path);
+                    self.nav_model.clear();
+                    self.open_vault_folder(&vault_path);
+                }
+
+                if let State::Ready {
+                    path: open_path, ..
+                } = &mut self.state
+                    && open_path.as_deref() == Some(&source_path)
+                {
+                    *open_path = Some(dest);
+                }
+
+                Task::none()
+            }
 
             Message::PaneResized(event) => {
                 let State::Ready { panes, .. } = &mut self.state else {
@@ -973,7 +1452,12 @@ fn cedilla_main_view<'a>(
     };
 
     container(content_column)
-        .padding(spacing.space_xxs)
+        .padding(
+            Padding::new(spacing.space_xxs as f32)
+                .left(0.)
+                .right(0.)
+                .top(0.),
+        )
         .width(Length::Fill)
         .height(Length::Fill)
         .into()

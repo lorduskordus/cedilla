@@ -7,7 +7,7 @@ description = "A markdown text editor for the COSMIC™ desktop"
 repository = "https://github.com/mariinkys/cedilla"
 
 [dependencies]
-futures-util = "0.3.31"
+futures-util = "0.3.32"
 i18n-embed = { version = "0.16", features = [
     "fluent-system",
     "desktop-requester",
@@ -24,6 +24,9 @@ pulldown-cmark = "0.13.0"
 url = "2.5.8"
 reqwest = "0.13.2"
 image = "0.25.9"
+dirs = "6.0.0"
+ignore = "0.4.25"
+slotmap = "1.1.1"
 
 [dependencies.libcosmic]
 git = "https://github.com/pop-os/libcosmic.git"
