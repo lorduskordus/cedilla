@@ -11,7 +11,7 @@
 <h3>A markdown text editor for the COSMIC™ desktop</h3>
 
 <img src="./resources/screenshots/main-gif-light.gif" width=650>
-<img src="./resources/screenshots/second-gif-light.png" width=650>
+<img src="./resources/screenshots/second-gif-light.gif" width=650>
 
 <br><br>
 
