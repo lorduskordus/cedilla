@@ -202,6 +202,42 @@ impl AppModel {
             .data(node);
     }
 
+    pub fn remove_nav_node(&mut self, target_path: &PathBuf) {
+        let entity_opt =
+            self.nav_model
+                .iter()
+                .find(|&id| match self.nav_model.data::<ProjectNode>(id) {
+                    Some(ProjectNode::File { path, .. }) => path == target_path,
+                    Some(ProjectNode::Folder { path, .. }) => path == target_path,
+                    None => false,
+                });
+
+        let Some(entity) = entity_opt else { return };
+
+        let position = self.nav_model.position(entity).unwrap_or(0);
+        let indent = self.nav_model.indent(entity).unwrap_or(0);
+
+        // remove all children (if it's a folder)
+        while let Some(child) = self.nav_model.entity_at(position + 1) {
+            if self.nav_model.indent(child).unwrap_or(0) > indent {
+                self.nav_model.remove(child);
+            } else {
+                break;
+            }
+        }
+
+        // remove the node itself
+        self.nav_model.remove(entity);
+
+        // clear selected path if it was inside the deleted path
+        #[allow(clippy::collapsible_if)]
+        if let Some(selected) = &self.selected_nav_path {
+            if selected.starts_with(target_path) || selected == target_path {
+                self.selected_nav_path = None;
+            }
+        }
+    }
+
     pub fn selected_directory(&self) -> PathBuf {
         self.selected_nav_path
             .clone()

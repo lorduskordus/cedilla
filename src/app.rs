@@ -20,6 +20,7 @@ use cosmic::widget::{
     segmented_button, text, toaster,
 };
 use cosmic::{prelude::*, surface, theme};
+use slotmap::Key as SlotMapKey;
 use std::collections::{HashMap, VecDeque};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -42,6 +43,8 @@ pub struct AppModel {
     core: cosmic::Core,
     /// Application navbar
     nav_model: segmented_button::SingleSelectModel,
+    /// Needed for navbar context menu func
+    nav_bar_context_id: segmented_button::Entity,
     /// Dialog Pages of the Application
     dialog_pages: VecDeque<DialogPage>,
     /// Holds the state of the application dialogs
@@ -136,6 +139,11 @@ pub enum Message {
     /// Asks to execute various actions related to the application dialogs
     DialogAction(dialogs::DialogAction),
 
+    /// Right click on a NavBar Item
+    NavBarContext(segmented_button::Entity),
+    /// Fired when a menu item is chosen
+    NavMenuAction(NavMenuAction),
+
     /// Creates a new empty file (no path)
     NewFile,
     /// Creates a new markdown file in the vault
@@ -201,6 +209,18 @@ impl<'a> markdown::Viewer<'a, cosmic::theme::Theme, cosmic::iced_widget::Rendere
     }
 }
 
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub enum NavMenuAction {
+    DeleteFile(segmented_button::Entity),
+}
+
+impl cosmic::widget::menu::Action for NavMenuAction {
+    type Message = cosmic::Action<Message>;
+    fn message(&self) -> Self::Message {
+        cosmic::Action::App(Message::NavMenuAction(*self))
+    }
+}
+
 /// Create a COSMIC application from the app model
 impl cosmic::Application for AppModel {
     /// The async executor that will be used to run your application's commands.
@@ -244,6 +264,7 @@ impl cosmic::Application for AppModel {
             toasts: Toasts::new(Message::CloseToast),
             core,
             nav_model: nav_bar::Model::builder().build(),
+            nav_bar_context_id: segmented_button::Entity::null(),
             context_page: ContextPage::default(),
             dialog_pages: VecDeque::default(),
             dialog_state: DialogState::default(),
@@ -306,7 +327,7 @@ impl cosmic::Application for AppModel {
         vec![container(preview_button).into()]
     }
 
-    fn nav_bar(&self) -> Option<Element<'_, cosmic::action::Action<Self::Message>>> {
+    fn nav_bar(&self) -> Option<Element<'_, cosmic::action::Action<Message>>> {
         if !self.core().nav_bar_active() {
             return None;
         }
@@ -328,6 +349,8 @@ impl cosmic::Application for AppModel {
             .button_padding([space_s, space_xxxs, space_s, space_xxxs])
             .button_spacing(space_xxxs)
             .on_activate(|entity| cosmic::action::cosmic(cosmic::app::Action::NavBar(entity)))
+            .on_context(|entity| cosmic::Action::App(Message::NavBarContext(entity)))
+            .context_menu(self.nav_context_menu(self.nav_bar_context_id))
             .spacing(space_none)
             .style(theme::SegmentedButton::FileNav)
             .apply(widget::container)
@@ -351,7 +374,47 @@ impl cosmic::Application for AppModel {
         Some(&self.nav_model)
     }
 
-    fn on_nav_select(&mut self, id: nav_bar::Id) -> Task<cosmic::Action<Self::Message>> {
+    fn nav_context_menu(
+        &self,
+        entity: widget::nav_bar::Id,
+    ) -> Option<Vec<widget::menu::Tree<cosmic::Action<Message>>>> {
+        if entity.is_null() {
+            return Some(vec![]);
+        }
+
+        // no context menu for root node
+        if self.nav_model.indent(entity).unwrap_or(0) == 0 {
+            return Some(vec![]);
+        }
+
+        let node = self.nav_model.data::<ProjectNode>(entity)?;
+
+        let mut items = Vec::with_capacity(1);
+
+        match node {
+            ProjectNode::File { .. } => {
+                items.push(cosmic::widget::menu::Item::Button(
+                    "Delete".to_string(),
+                    None,
+                    NavMenuAction::DeleteFile(entity),
+                ));
+            }
+            ProjectNode::Folder { .. } => {
+                items.push(cosmic::widget::menu::Item::Button(
+                    "Delete".to_string(),
+                    None,
+                    NavMenuAction::DeleteFile(entity),
+                ));
+            }
+        }
+
+        Some(cosmic::widget::menu::items(
+            &std::collections::HashMap::new(),
+            items,
+        ))
+    }
+
+    fn on_nav_select(&mut self, id: nav_bar::Id) -> Task<cosmic::Action<Message>> {
         let node_opt = match self.nav_model.data_mut::<ProjectNode>(id) {
             Some(node) => {
                 if let ProjectNode::Folder { open, .. } = node {
@@ -583,6 +646,49 @@ impl cosmic::Application for AppModel {
                 };
 
                 action.execute(&mut self.dialog_pages, &self.dialog_state)
+            }
+
+            Message::NavBarContext(entity) => {
+                self.nav_bar_context_id = entity;
+                Task::none()
+            }
+            Message::NavMenuAction(action) => {
+                self.nav_bar_context_id = segmented_button::Entity::null();
+                match action {
+                    NavMenuAction::DeleteFile(entity) => {
+                        let Some(node) = self.nav_model.data::<ProjectNode>(entity).cloned() else {
+                            return Task::none();
+                        };
+
+                        let path = match &node {
+                            ProjectNode::File { path, .. } => path.clone(),
+                            ProjectNode::Folder { path, .. } => path.clone(),
+                        };
+
+                        let delete_result = match &node {
+                            ProjectNode::File { .. } => std::fs::remove_file(&path),
+                            ProjectNode::Folder { .. } => std::fs::remove_dir_all(&path),
+                        };
+
+                        if let Err(e) = delete_result {
+                            return self.update(Message::AddToast(CedillaToast::new(e)));
+                        }
+
+                        // remove from nav model
+                        self.remove_nav_node(&path);
+
+                        // if the deleted file was currently open, create a new empty file
+                        if let State::Ready {
+                            path: open_path, ..
+                        } = &self.state
+                            && open_path.as_deref() == Some(&path)
+                        {
+                            return self.update(Message::NewFile);
+                        }
+
+                        Task::none()
+                    }
+                }
             }
 
             Message::NewFile => {
