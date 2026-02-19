@@ -378,6 +378,15 @@ impl cosmic::Application for AppModel {
         &self,
         entity: widget::nav_bar::Id,
     ) -> Option<Vec<widget::menu::Tree<cosmic::Action<Message>>>> {
+        if entity.is_null() {
+            return Some(vec![]);
+        }
+
+        // no context menu for root node
+        if self.nav_model.indent(entity).unwrap_or(0) == 0 {
+            return Some(vec![]);
+        }
+
         let node = self.nav_model.data::<ProjectNode>(entity)?;
 
         let mut items = Vec::with_capacity(1);
@@ -403,11 +412,6 @@ impl cosmic::Application for AppModel {
             &std::collections::HashMap::new(),
             items,
         ))
-    }
-
-    fn on_nav_context(&mut self, id: nav_bar::Id) -> Task<cosmic::Action<Message>> {
-        self.nav_bar_context_id = id;
-        Task::none()
     }
 
     fn on_nav_select(&mut self, id: nav_bar::Id) -> Task<cosmic::Action<Message>> {
@@ -645,13 +649,47 @@ impl cosmic::Application for AppModel {
             }
 
             Message::NavBarContext(entity) => {
-                eprintln!("NavBarContext fired: {:?}", entity);
                 self.nav_bar_context_id = entity;
                 Task::none()
             }
-            Message::NavMenuAction(action) => match action {
-                NavMenuAction::DeleteFile(entity) => todo!(),
-            },
+            Message::NavMenuAction(action) => {
+                self.nav_bar_context_id = segmented_button::Entity::null();
+                match action {
+                    NavMenuAction::DeleteFile(entity) => {
+                        let Some(node) = self.nav_model.data::<ProjectNode>(entity).cloned() else {
+                            return Task::none();
+                        };
+
+                        let path = match &node {
+                            ProjectNode::File { path, .. } => path.clone(),
+                            ProjectNode::Folder { path, .. } => path.clone(),
+                        };
+
+                        let delete_result = match &node {
+                            ProjectNode::File { .. } => std::fs::remove_file(&path),
+                            ProjectNode::Folder { .. } => std::fs::remove_dir_all(&path),
+                        };
+
+                        if let Err(e) = delete_result {
+                            return self.update(Message::AddToast(CedillaToast::new(e)));
+                        }
+
+                        // remove from nav model
+                        self.remove_nav_node(&path);
+
+                        // if the deleted file was currently open, create a new empty file
+                        if let State::Ready {
+                            path: open_path, ..
+                        } = &self.state
+                            && open_path.as_deref() == Some(&path)
+                        {
+                            return self.update(Message::NewFile);
+                        }
+
+                        Task::none()
+                    }
+                }
+            }
 
             Message::NewFile => {
                 // Create initial pane configuration with editor on left, preview on right
