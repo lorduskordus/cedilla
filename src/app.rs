@@ -2,7 +2,7 @@
 
 use crate::app::app_menu::MenuAction;
 use crate::app::context_page::ContextPage;
-use crate::app::core::utils::project::ProjectNode;
+use crate::app::core::project::ProjectNode;
 use crate::app::core::utils::{self, CedillaToast};
 use crate::app::dialogs::{DialogPage, DialogState};
 use crate::app::widgets::{TextEditor, markdown, sensor, text_editor};

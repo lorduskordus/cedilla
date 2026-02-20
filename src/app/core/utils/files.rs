@@ -12,7 +12,6 @@ pub async fn load_file(path: PathBuf) -> Result<(PathBuf, Arc<String>), anywho::
 }
 
 pub async fn save_file(path: PathBuf, content: String) -> Result<PathBuf, anywho::Error> {
-    dbg!(&path);
     tokio::fs::write(&path, content)
         .await
         .map_err(|e| anywho!("{}", e))?;
