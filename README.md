@@ -32,6 +32,7 @@ This is a WIP project that may or may not be released eventually.
 - [X] Add vault/project sidebar
 - [X] Ctrl-Z
 - [X] Helper headerbar with options to format text 
+- [ ] Remember view state on close (navabar and preview toggle), also allow to resume from last open file on app open 
 - [ ] Optional scrollbar sync
 - [ ] Support html 
 - [ ] PDF Exporting
