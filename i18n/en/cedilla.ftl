@@ -32,6 +32,9 @@ move-vault = Move Vault
 current-location = Current Location: { $location }
 show = Show
 hide = Hide
+last-file = Open the last file when the app starts
+yes = Yes
+no = No
 
 <#-- Application MenuBar -->
 file = File

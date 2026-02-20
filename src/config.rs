@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0
 
-use std::{fmt::Display, sync::LazyLock};
+use std::{fmt::Display, path::PathBuf, sync::LazyLock};
 
 use cosmic::{
     cosmic_config::{self, Config, CosmicConfigEntry, cosmic_config_derive::CosmicConfigEntry},
@@ -19,6 +19,10 @@ pub struct CedillaConfig {
     pub vault_path: String,
     pub show_helper_header_bar: ShowState,
     pub show_status_bar: ShowState,
+    pub last_navbar_showstate: ShowState,
+    pub last_preview_showstate: ShowState,
+    pub open_last_file: BoolState,
+    pub last_open_file: Option<PathBuf>,
 }
 
 impl Default for CedillaConfig {
@@ -34,6 +38,10 @@ impl Default for CedillaConfig {
             vault_path: vault_path.to_string_lossy().to_string(),
             show_helper_header_bar: ShowState::default(),
             show_status_bar: ShowState::default(),
+            last_navbar_showstate: ShowState::default(),
+            last_preview_showstate: ShowState::default(),
+            open_last_file: BoolState::default(),
+            last_open_file: None,
         }
     }
 }
@@ -112,6 +120,44 @@ impl ShowState {
     }
 }
 
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
+pub enum BoolState {
+    #[default]
+    Yes,
+    No,
+}
+
+impl Display for BoolState {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            BoolState::Yes => write!(f, "{}", fl!("yes")),
+            BoolState::No => write!(f, "{}", fl!("no")),
+        }
+    }
+}
+
+impl BoolState {
+    pub fn all_labels() -> &'static [String] {
+        static LABELS: LazyLock<Vec<String>> = LazyLock::new(|| vec![fl!("yes"), fl!("no")]);
+        &LABELS
+    }
+
+    pub fn from_index(index: usize) -> Self {
+        match index {
+            0 => BoolState::Yes,
+            1 => BoolState::No,
+            _ => BoolState::default(),
+        }
+    }
+
+    pub fn to_index(self) -> usize {
+        match self {
+            BoolState::Yes => 0,
+            BoolState::No => 1,
+        }
+    }
+}
+
 /// Represents the different inputs that can happen in the config [`ContextPage`]
 #[derive(Debug, Clone)]
 pub enum ConfigInput {
@@ -121,4 +167,6 @@ pub enum ConfigInput {
     HelperHeaderBarShowState(ShowState),
     /// Update the status bar show state
     StatusBarShowState(ShowState),
+    /// Update if the user wants to open last opened file or not
+    OpenLastFile(BoolState),
 }

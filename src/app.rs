@@ -6,11 +6,11 @@ use crate::app::core::project::ProjectNode;
 use crate::app::core::utils::{self, CedillaToast};
 use crate::app::dialogs::{DialogPage, DialogState};
 use crate::app::widgets::{TextEditor, markdown, sensor, text_editor};
-use crate::config::{AppTheme, CedillaConfig, ConfigInput, ShowState};
+use crate::config::{AppTheme, BoolState, CedillaConfig, ConfigInput, ShowState};
 use crate::key_binds::key_binds;
 use crate::{fl, icons};
 use cosmic::app::context_drawer;
-use cosmic::iced::{Alignment, Event, Length, Padding, Subscription, highlighter};
+use cosmic::iced::{Alignment, Event, Length, Padding, Subscription, highlighter, window};
 use cosmic::iced_core::keyboard::{Key, Modifiers};
 use cosmic::iced_widget::{center, column, row, tooltip};
 use cosmic::widget::menu::Action;
@@ -110,7 +110,8 @@ enum ImageState {
 }
 
 /// State of the markdown preview in the app
-enum PreviewState {
+#[derive(Debug, Clone)]
+pub enum PreviewState {
     Hidden,
     Shown,
 }
@@ -144,6 +145,8 @@ pub enum Message {
     /// Fired when a menu item is chosen
     NavMenuAction(NavMenuAction),
 
+    /// Startup Message, checks config and set's the state as needed
+    Startup,
     /// Creates a new empty file (no path)
     NewFile,
     /// Creates a new markdown file in the vault
@@ -169,6 +172,8 @@ pub enum Message {
     /// Callback after asking to move the vault
     VaultMoved(Result<PathBuf, anywho::Error>),
 
+    /// Set's the preview to the desired state
+    SetPreviewState(PreviewState),
     /// Pane grid resized callback
     PaneResized(pane_grid::ResizeEvent),
     /// Pane grid dragged callback
@@ -186,6 +191,8 @@ pub enum Message {
 
     /// Callback after input on the Config [`ContextPage`]
     ConfigInput(ConfigInput),
+    /// Callback after using asks to close the app
+    AppCloseRequested,
 }
 
 struct MarkdownViewer<'a> {
@@ -291,6 +298,12 @@ impl cosmic::Application for AppModel {
             state: State::Loading,
         };
 
+        // restore last navbar app state
+        match app.config.last_navbar_showstate {
+            ShowState::Show => app.core.nav_bar_set_toggled(true),
+            ShowState::Hide => app.core.nav_bar_set_toggled(false),
+        }
+
         // load vault
         let vault_path = PathBuf::from(&app.config.vault_path);
         if vault_path.exists() && vault_path.is_dir() {
@@ -317,7 +330,7 @@ impl cosmic::Application for AppModel {
         let tasks = vec![
             app.update_title(),
             cosmic::command::set_theme(app.config.app_theme.theme()),
-            Task::done(cosmic::action::app(Message::NewFile)),
+            Task::done(cosmic::action::app(Message::Startup)),
         ];
 
         (app, Task::batch(tasks))
@@ -572,6 +585,8 @@ impl cosmic::Application for AppModel {
         let subscriptions = vec![
             // Watch for key_bind inputs
             cosmic::iced::event::listen_with(|event, status, _| match event {
+                Event::Window(window::Event::Closed) => Some(Message::AppCloseRequested),
+                Event::Window(window::Event::CloseRequested) => Some(Message::AppCloseRequested),
                 Event::Keyboard(cosmic::iced::keyboard::Event::KeyPressed {
                     key,
                     modifiers,
@@ -670,6 +685,7 @@ impl cosmic::Application for AppModel {
                             PreviewState::Hidden => *preview_state = PreviewState::Shown,
                             PreviewState::Shown => *preview_state = PreviewState::Hidden,
                         }
+
                         Task::none()
                     }
                     MenuAction::Undo => self.update(Message::Undo),
@@ -724,6 +740,47 @@ impl cosmic::Application for AppModel {
                 }
             }
 
+            Message::Startup => {
+                // Create initial pane configuration with editor on left, preview on right
+                let (mut panes, first_pane) = pane_grid::State::new(PaneContent::Editor);
+                panes.split(pane_grid::Axis::Vertical, first_pane, PaneContent::Preview);
+
+                let preview_state = match self.config.last_preview_showstate {
+                    ShowState::Show => PreviewState::Shown,
+                    ShowState::Hide => PreviewState::Hidden,
+                };
+
+                let path = match self.config.open_last_file {
+                    crate::config::BoolState::Yes => self.config.last_open_file.clone(),
+                    crate::config::BoolState::No => None,
+                };
+
+                if let Some(p) = path {
+                    // store parent directory of selected file
+                    self.selected_nav_path = p.parent().map(|p| p.to_path_buf());
+
+                    return Task::perform(utils::files::load_file(p), |res| {
+                        cosmic::action::app(Message::OpenFile(res))
+                    })
+                    .chain(Task::done(cosmic::action::app(
+                        Message::SetPreviewState(preview_state),
+                    )));
+                }
+
+                // same as new file but we preserve the preview state
+                self.state = State::Ready {
+                    path: None,
+                    editor_content: text_editor::Content::new(),
+                    markdown_images: HashMap::new(),
+                    items: vec![],
+                    is_dirty: true,
+                    panes,
+                    preview_state,
+                    history: Vec::new(),
+                    history_index: 0,
+                };
+                Task::none()
+            }
             Message::NewFile => {
                 // Create initial pane configuration with editor on left, preview on right
                 let (mut panes, first_pane) = pane_grid::State::new(PaneContent::Editor);
@@ -1123,6 +1180,15 @@ impl cosmic::Application for AppModel {
                 }
             }
 
+            Message::SetPreviewState(desired_state) => {
+                let State::Ready { preview_state, .. } = &mut self.state else {
+                    return Task::none();
+                };
+
+                *preview_state = desired_state;
+
+                Task::none()
+            }
             Message::PaneResized(event) => {
                 let State::Ready { panes, .. } = &mut self.state else {
                     return Task::none();
@@ -1269,7 +1335,61 @@ impl cosmic::Application for AppModel {
                     }
                     Task::none()
                 }
+                ConfigInput::OpenLastFile(state) => {
+                    if let Some(handler) = &self.config_handler {
+                        if let Err(err) = self.config.set_open_last_file(handler, state) {
+                            eprintln!("{err}");
+                            // even if it fails we update the config (it won't get saved after restart)
+                            let mut old_config = self.config.clone();
+                            old_config.open_last_file = state;
+                            self.config = old_config;
+                        }
+                    }
+                    Task::none()
+                }
             },
+            Message::AppCloseRequested => {
+                let State::Ready {
+                    preview_state,
+                    path,
+                    ..
+                } = &self.state
+                else {
+                    return Task::none();
+                };
+
+                if let Some(handler) = &self.config_handler {
+                    let current_preview_state = match preview_state {
+                        PreviewState::Hidden => ShowState::Hide,
+                        PreviewState::Shown => ShowState::Show,
+                    };
+
+                    let current_nav_state = match self.core.nav_bar_active() {
+                        true => ShowState::Show,
+                        false => ShowState::Hide,
+                    };
+
+                    if let Err(err) = self
+                        .config
+                        .set_last_preview_showstate(handler, current_preview_state)
+                    {
+                        eprintln!("{err}");
+                    }
+
+                    if let Err(err) = self
+                        .config
+                        .set_last_navbar_showstate(handler, current_nav_state)
+                    {
+                        eprintln!("{err}");
+                    }
+
+                    if let Err(err) = self.config.set_last_open_file(handler, path.clone()) {
+                        eprintln!("{err}");
+                    }
+                }
+
+                cosmic::iced::window::close(window::Id::RESERVED)
+            }
         }
     }
 }
@@ -1317,6 +1437,17 @@ impl AppModel {
                             widget::button::destructive(fl!("move-vault"))
                                 .on_press(Message::MoveVault),
                         ),
+                )
+                .add(
+                    widget::settings::item::builder(fl!("last-file")).control(widget::dropdown(
+                        BoolState::all_labels(),
+                        Some(self.config.open_last_file.to_index()),
+                        |index| {
+                            Message::ConfigInput(ConfigInput::OpenLastFile(BoolState::from_index(
+                                index,
+                            )))
+                        },
+                    )),
                 )
                 .into(),
             widget::settings::section()
