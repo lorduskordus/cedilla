@@ -1,6 +1,7 @@
 [Desktop Entry]
 Name=Cedilla
 Comment=A markdown text editor for the COSMIC™ desktop
+Comment[cs]=Markdown textový editor pro prostředí COSMIC™
 Type=Application
 Icon=dev.mariinkys.Cedilla
 Exec=cedilla %F
