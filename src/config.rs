@@ -25,6 +25,7 @@ pub struct CedillaConfig {
     pub last_open_file: Option<PathBuf>,
     pub scrollbar_sync: BoolState,
     pub gotenberg_url: String,
+    pub text_size: i32,
 }
 
 impl Default for CedillaConfig {
@@ -46,6 +47,7 @@ impl Default for CedillaConfig {
             last_open_file: None,
             scrollbar_sync: BoolState::default(),
             gotenberg_url: String::new(),
+            text_size: 16,
         }
     }
 }
@@ -184,4 +186,6 @@ pub enum ConfigInput {
     GotenbergUrlInput(String),
     /// Save the new gotenberg url
     GotenbergUrlSave,
+    /// Update the editor and preview text size
+    UpdateTextSize(u16),
 }

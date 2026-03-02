@@ -43,6 +43,7 @@ pdf-exporting = PDF Exporting
 gotenberg-url = Set the Gotenberg server URL
 apply = Apply
 more-info = More Info
+text-size = Text Size
 
 <#-- Application MenuBar -->
 file = File

@@ -1492,6 +1492,19 @@ impl cosmic::Application for AppModel {
 
                     Task::none()
                 }
+                ConfigInput::UpdateTextSize(new_size) => {
+                    let size = new_size as i32;
+                    if let Some(handler) = &self.config_handler {
+                        if let Err(err) = self.config.set_text_size(handler, size) {
+                            eprintln!("{err}");
+                            // even if it fails we update the config (it won't get saved after restart)
+                            let mut old_config = self.config.clone();
+                            old_config.text_size = size;
+                            self.config = old_config;
+                        }
+                    }
+                    Task::none()
+                }
             },
             Message::AppCloseRequested(window_id) => {
                 let State::Ready {
@@ -1631,6 +1644,16 @@ impl AppModel {
                     ),
                 )
                 .add(
+                    widget::settings::item::builder(fl!("text-size"))
+                        .description(format!("{}", self.config.text_size))
+                        .control(
+                            widget::slider(6..=30, self.config.text_size as u16, |v| {
+                                Message::ConfigInput(ConfigInput::UpdateTextSize(v))
+                            })
+                            .step(1u16),
+                        ),
+                )
+                .add(
                     cosmic::widget::column::with_children(vec![
                         column![
                             text::body(fl!("pdf-exporting")),
@@ -1724,6 +1747,7 @@ fn cedilla_main_view<'a>(
                             },
                             |highlight, _theme| highlight.to_format(),
                         )
+                        .size(app_config.text_size)
                         .padding(0)
                         .retain_focus_on_external_click(true)
                         .on_action(Message::Edit),
@@ -1784,7 +1808,7 @@ fn cedilla_main_view<'a>(
                         MarkWidget::new(markstate)
                             .on_updating_state(Message::UpdateMarkState)
                             .on_clicking_link(Message::LaunchUrl)
-                            .text_size(18.)
+                            .text_size(app_config.text_size)
                             .code_highlight_theme(highlighter_theme)
                             .on_drawing_image(|info| {
                                 if let Some(image) = images.get(info.url).cloned() {
