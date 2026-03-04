@@ -6,8 +6,7 @@ use crate::app::{AppModel, Message};
 use crate::config::CedillaConfig;
 use cosmic::iced_core::keyboard::{Key, Modifiers};
 use cosmic::widget::ToastId;
-use cosmic::widget::menu::Action;
-use cosmic::{Application, prelude::*, surface};
+use cosmic::{prelude::*, surface};
 
 impl AppModel {
     pub fn handle_close_toast(&mut self, id: ToastId) -> Task<cosmic::Action<Message>> {
@@ -48,7 +47,7 @@ impl AppModel {
     pub fn handle_key(&mut self, modifiers: Modifiers, key: Key) -> Task<cosmic::Action<Message>> {
         for (key_bind, action) in self.key_binds.iter() {
             if key_bind.matches(modifiers, &key) {
-                return self.update(action.message());
+                return self.handle_menu_action(*action);
             }
         }
         Task::none()

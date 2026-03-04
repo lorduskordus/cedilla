@@ -3,8 +3,8 @@
 use crate::app::core::project::ProjectNode;
 use crate::app::core::utils::{self, CedillaToast};
 use crate::app::{AppModel, Message, State};
+use cosmic::prelude::*;
 use cosmic::widget::segmented_button;
-use cosmic::{Application, prelude::*};
 use std::path::PathBuf;
 
 impl AppModel {
@@ -27,7 +27,7 @@ impl AppModel {
         };
 
         if let Err(e) = delete_result {
-            return self.update(Message::AddToast(CedillaToast::new(e)));
+            return self.handle_add_toast(CedillaToast::new(e));
         }
 
         self.remove_nav_node(&path);
@@ -36,7 +36,7 @@ impl AppModel {
         if let State::Ready { editor, .. } = &self.state
             && editor.path.as_deref() == Some(&path)
         {
-            return self.update(Message::NewFile);
+            return self.handle_new_file();
         }
 
         Task::none()
@@ -76,14 +76,14 @@ impl AppModel {
         }
 
         if new_path.exists() {
-            return self.update(Message::AddToast(CedillaToast::new(format!(
+            return self.handle_add_toast(CedillaToast::new(format!(
                 "A file or folder named {:?} already exists",
                 new_name
-            ))));
+            )));
         }
 
         if let Err(e) = std::fs::rename(&old_path, &new_path) {
-            return self.update(Message::AddToast(CedillaToast::new(e)));
+            return self.handle_add_toast(CedillaToast::new(e));
         }
 
         self.rename_nav_node(&old_path, &new_path, &new_name);
@@ -127,7 +127,7 @@ impl AppModel {
         }
 
         if let Err(e) = std::fs::rename(&source_path, &dest) {
-            return self.update(Message::AddToast(CedillaToast::new(e)));
+            return self.handle_add_toast(CedillaToast::new(e));
         }
 
         let target_entity = self.nav_model.iter().find(|&id| {
@@ -205,7 +205,7 @@ impl AppModel {
 
                 Task::done(cosmic::action::app(Message::NewFile))
             }
-            Err(e) => self.update(Message::AddToast(CedillaToast::new(e))),
+            Err(e) => self.handle_add_toast(CedillaToast::new(e)),
         }
     }
 }

@@ -5,7 +5,7 @@ use crate::app::context_page::ContextPage;
 use crate::app::core::utils;
 use crate::app::{AppModel, Message, PreviewState};
 use crate::app::{State, dialogs};
-use cosmic::{Application, prelude::*};
+use cosmic::prelude::*;
 
 impl AppModel {
     pub fn handle_menu_action(&mut self, action: MenuAction) -> Task<cosmic::Action<Message>> {
@@ -14,8 +14,8 @@ impl AppModel {
         };
 
         match action {
-            MenuAction::About => self.update(Message::ToggleContextPage(ContextPage::About)),
-            MenuAction::Settings => self.update(Message::ToggleContextPage(ContextPage::Settings)),
+            MenuAction::About => self.handle_toggle_context_page(ContextPage::About),
+            MenuAction::Settings => self.handle_toggle_context_page(ContextPage::Settings),
             MenuAction::OpenFile => Task::perform(
                 async move {
                     match utils::files::open_markdown_file_picker().await {
@@ -28,14 +28,14 @@ impl AppModel {
                     None => cosmic::action::none(),
                 },
             ),
-            MenuAction::NewFile => self.update(Message::NewFile),
-            MenuAction::NewVaultFile => self.update(Message::DialogAction(
-                dialogs::DialogAction::OpenNewVaultFileDialog,
-            )),
-            MenuAction::NewVaultFolder => self.update(Message::DialogAction(
-                dialogs::DialogAction::OpenNewVaultFolderDialog,
-            )),
-            MenuAction::SaveFile => self.update(Message::SaveFile),
+            MenuAction::NewFile => self.handle_new_file(),
+            MenuAction::NewVaultFile => {
+                self.handle_dialog_action(dialogs::DialogAction::OpenNewVaultFileDialog)
+            }
+            MenuAction::NewVaultFolder => {
+                self.handle_dialog_action(dialogs::DialogAction::OpenNewVaultFolderDialog)
+            }
+            MenuAction::SaveFile => self.handle_save_file(),
             MenuAction::TogglePreview => {
                 match preview_state {
                     PreviewState::Hidden => *preview_state = PreviewState::Shown,
@@ -43,8 +43,8 @@ impl AppModel {
                 }
                 Task::none()
             }
-            MenuAction::Undo => self.update(Message::Undo),
-            MenuAction::Redo => self.update(Message::Redo),
+            MenuAction::Undo => self.handle_undo(),
+            MenuAction::Redo => self.handle_redo(),
         }
     }
 }

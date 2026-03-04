@@ -2,8 +2,8 @@
 
 use crate::app::dialogs;
 use crate::app::{AppModel, Message, NavMenuAction, State};
+use cosmic::prelude::*;
 use cosmic::widget::segmented_button;
-use cosmic::{Application, prelude::*};
 use slotmap::Key as SlotmapKey;
 
 impl AppModel {
@@ -33,19 +33,17 @@ impl AppModel {
         self.nav_bar_context_id = segmented_button::Entity::null();
 
         match action {
-            NavMenuAction::DeleteNode(entity) => self.update(Message::DialogAction(
-                dialogs::DialogAction::OpenDeleteNodeDialog(entity),
-            )),
-            NavMenuAction::RenameNode(entity) => self.update(Message::DialogAction(
-                dialogs::DialogAction::OpenRenameNodeDialog(entity),
-            )),
+            NavMenuAction::DeleteNode(entity) => {
+                self.handle_dialog_action(dialogs::DialogAction::OpenDeleteNodeDialog(entity))
+            }
+            NavMenuAction::RenameNode(entity) => {
+                self.handle_dialog_action(dialogs::DialogAction::OpenRenameNodeDialog(entity))
+            }
             NavMenuAction::MoveNode(entity) => {
                 let vault_path = self.config.vault_path();
                 self.dialog_state.available_folders = self.collect_all_folders(&vault_path, entity);
 
-                self.update(Message::DialogAction(
-                    dialogs::DialogAction::OpenMoveNodeDialog(entity),
-                ))
+                self.handle_dialog_action(dialogs::DialogAction::OpenMoveNodeDialog(entity))
             }
         }
     }

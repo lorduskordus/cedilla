@@ -95,11 +95,11 @@ impl AppModel {
             // if it's a vault path with any modification or if it's a new file with any content
             if editor.needs_confirmation() {
                 println!("TODO: We're here but for some reason it doesn't work");
-                //self.update(Message::DialogAction(
+                //self.handle_dialog_action(
                 //    dialogs::DialogAction::OpenConfirmCloseFileDialog(
                 //        DiscardChangesAction::CloseApp,
                 //    ),
-                //))
+                //)
                 process::exit(0);
             } else {
                 process::exit(0);

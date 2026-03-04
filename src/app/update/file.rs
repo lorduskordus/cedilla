@@ -7,7 +7,7 @@ use crate::app::core::utils::{self, CedillaToast};
 use crate::app::{AppModel, Message, PreviewState, State};
 use crate::app::{DiscardChangesAction, create_default_panes};
 use crate::config::{BoolState, ShowState};
-use cosmic::{Application, prelude::*};
+use cosmic::prelude::*;
 use frostmark::MarkState;
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
@@ -105,7 +105,7 @@ impl AppModel {
 
         // create the file on disk
         if let Err(e) = std::fs::write(&file_path, "") {
-            return self.update(Message::AddToast(CedillaToast::new(e)));
+            return self.handle_add_toast(CedillaToast::new(e));
         }
 
         self.insert_file_node(&file_path, &dir);
@@ -156,7 +156,7 @@ impl AppModel {
 
         // create the folder on disk
         if let Err(e) = std::fs::create_dir(&folder_path) {
-            return self.update(Message::AddToast(CedillaToast::new(e)));
+            return self.handle_add_toast(CedillaToast::new(e));
         }
 
         // insert folder to navbar
@@ -245,7 +245,7 @@ impl AppModel {
 
                 Task::none()
             }
-            Err(e) => self.update(Message::AddToast(CedillaToast::new(e))),
+            Err(e) => self.handle_add_toast(CedillaToast::new(e)),
         }
     }
 
@@ -262,9 +262,9 @@ impl AppModel {
                 editor.path = Some(new_path);
                 editor.is_dirty = false;
 
-                self.update(Message::AddToast(CedillaToast::new("File Saved!")))
+                self.handle_add_toast(CedillaToast::new("File Saved!"))
             }
-            Err(e) => self.update(Message::AddToast(CedillaToast::new(e))),
+            Err(e) => self.handle_add_toast(CedillaToast::new(e)),
         }
     }
 
