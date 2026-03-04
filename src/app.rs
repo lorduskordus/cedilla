@@ -11,7 +11,7 @@ use crate::config::{AppTheme, BoolState, CedillaConfig, ConfigInput, ShowState};
 use crate::key_binds::key_binds;
 use crate::{fl, icons};
 use cosmic::app::context_drawer;
-use cosmic::iced::{Alignment, Event, Length, Padding, Subscription, highlighter, window};
+use cosmic::iced::{Alignment, Event, Font, Length, Padding, Subscription, highlighter, window};
 use cosmic::iced_core::keyboard::{Key, Modifiers};
 use cosmic::iced_widget::{center, column, row, scrollable, tooltip};
 use cosmic::widget::space::horizontal;
@@ -835,8 +835,8 @@ fn cedilla_main_view<'a>(
 
     let create_title = |icon_name: &str, title: String| {
         row![
-            widget::icon::from_name(icon_name).size(16),
-            text(title).size(14),
+            icons::get_icon_owned(icon_name.to_string(), 18).size(16),
+            text(title.to_uppercase()).font(Font::MONOSPACE).size(14),
         ]
         .spacing(spacing.space_xxs)
         .padding([5, spacing.space_xxs])
@@ -846,7 +846,7 @@ fn cedilla_main_view<'a>(
     let main_content: Element<'a, Message> = if matches!(preview_state, PreviewState::Hidden) {
         // Editor only view
         container(column![
-            container(create_title("text-editor-symbolic", fl!("editor")))
+            container(create_title("edit-symbolic", fl!("editor")))
                 .padding(3.)
                 .width(Length::Fill)
                 .class(theme::Container::Card),
@@ -860,8 +860,8 @@ fn cedilla_main_view<'a>(
         // Pane grid with editor and preview
         pane_grid::PaneGrid::new(panes, |_pane, content, _is_focused| {
             let (title, icon_name) = match content {
-                PaneContent::Editor => (fl!("editor"), "text-editor-symbolic"),
-                PaneContent::Preview => (fl!("preview"), "view-paged-symbolic"),
+                PaneContent::Editor => (fl!("editor"), "edit-symbolic"),
+                PaneContent::Preview => (fl!("preview"), "show-symbolic"),
             };
 
             let highlighter_theme = match app_config.app_theme {
