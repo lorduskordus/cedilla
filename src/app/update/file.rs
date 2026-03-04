@@ -1,11 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0
 
-use crate::app::DiscardChangesAction;
 use crate::app::core::history::HistoryState;
 use crate::app::core::utils::{self, CedillaToast};
-use crate::app::{AppModel, Message, PaneContent, PreviewState, State};
+use crate::app::{AppModel, Message, PreviewState, State};
+use crate::app::{DiscardChangesAction, create_default_panes};
 use crate::config::{BoolState, ShowState};
-use cosmic::widget::pane_grid;
 use cosmic::{Application, prelude::*};
 use frostmark::MarkState;
 use std::collections::{HashMap, HashSet};
@@ -15,8 +14,7 @@ use widgets::text_editor;
 
 impl AppModel {
     pub fn handle_startup(&mut self) -> Task<cosmic::Action<Message>> {
-        let (mut panes, first_pane) = pane_grid::State::new(PaneContent::Editor);
-        panes.split(pane_grid::Axis::Vertical, first_pane, PaneContent::Preview);
+        let panes = create_default_panes();
 
         let preview_state = match self.config.last_preview_showstate {
             ShowState::Show => PreviewState::Shown,
@@ -57,8 +55,7 @@ impl AppModel {
     }
 
     pub fn handle_new_file(&mut self) -> Task<cosmic::Action<Message>> {
-        let (mut panes, first_pane) = pane_grid::State::new(PaneContent::Editor);
-        panes.split(pane_grid::Axis::Vertical, first_pane, PaneContent::Preview);
+        let panes = create_default_panes();
 
         self.state = State::Ready {
             path: None,
@@ -100,8 +97,7 @@ impl AppModel {
 
         self.insert_file_node(&file_path, &dir);
 
-        let (mut panes, first_pane) = pane_grid::State::new(PaneContent::Editor);
-        panes.split(pane_grid::Axis::Vertical, first_pane, PaneContent::Preview);
+        let panes = create_default_panes();
 
         self.state = State::Ready {
             path: Some(file_path),
@@ -197,8 +193,7 @@ impl AppModel {
                     self.selected_nav_path = path.parent().map(|p| p.to_path_buf());
                 }
 
-                let (mut panes, first_pane) = pane_grid::State::new(PaneContent::Editor);
-                panes.split(pane_grid::Axis::Vertical, first_pane, PaneContent::Preview);
+                let panes = create_default_panes();
 
                 let markstate = MarkState::with_html_and_markdown(content.as_ref());
                 let images_in_progress = HashSet::new();

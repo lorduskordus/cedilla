@@ -415,46 +415,26 @@ impl cosmic::Application for AppModel {
             return Some(vec![]);
         }
 
-        let node = self.nav_model.data::<ProjectNode>(entity)?;
+        // no need to use this for now as we don't have different context menu options for files and folders
+        //let node = self.nav_model.data::<ProjectNode>(entity)?;
 
         let mut items = Vec::with_capacity(1);
 
-        match node {
-            ProjectNode::File { .. } => {
-                items.push(cosmic::widget::menu::Item::Button(
-                    fl!("delete"),
-                    None,
-                    NavMenuAction::DeleteNode(entity),
-                ));
-                items.push(cosmic::widget::menu::Item::Button(
-                    fl!("rename"),
-                    None,
-                    NavMenuAction::RenameNode(entity),
-                ));
-                items.push(cosmic::widget::menu::Item::Button(
-                    fl!("move-to"),
-                    None,
-                    NavMenuAction::MoveNode(entity),
-                ));
-            }
-            ProjectNode::Folder { .. } => {
-                items.push(cosmic::widget::menu::Item::Button(
-                    fl!("delete"),
-                    None,
-                    NavMenuAction::DeleteNode(entity),
-                ));
-                items.push(cosmic::widget::menu::Item::Button(
-                    fl!("rename"),
-                    None,
-                    NavMenuAction::RenameNode(entity),
-                ));
-                items.push(cosmic::widget::menu::Item::Button(
-                    fl!("move-to"),
-                    None,
-                    NavMenuAction::MoveNode(entity),
-                ));
-            }
-        }
+        items.push(cosmic::widget::menu::Item::Button(
+            fl!("delete"),
+            None,
+            NavMenuAction::DeleteNode(entity),
+        ));
+        items.push(cosmic::widget::menu::Item::Button(
+            fl!("rename"),
+            None,
+            NavMenuAction::RenameNode(entity),
+        ));
+        items.push(cosmic::widget::menu::Item::Button(
+            fl!("move-to"),
+            None,
+            NavMenuAction::MoveNode(entity),
+        ));
 
         Some(cosmic::widget::menu::items(
             &std::collections::HashMap::new(),
@@ -1090,4 +1070,10 @@ fn editor_scrollable_id() -> widget::Id {
 
 fn preview_scrollable_id() -> widget::Id {
     widget::Id::new("preview_scroll")
+}
+
+fn create_default_panes() -> pane_grid::State<PaneContent> {
+    let (mut panes, first_pane) = pane_grid::State::new(PaneContent::Editor);
+    panes.split(pane_grid::Axis::Vertical, first_pane, PaneContent::Preview);
+    panes
 }
