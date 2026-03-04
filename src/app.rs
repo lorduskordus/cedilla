@@ -801,31 +801,28 @@ fn cedilla_main_view<'a>(
                 AppTheme::System => highlighter::Theme::Base16Ocean,
             };
 
-            widget::id_container(
-                scrollable(
-                    TextEditor::new(&editor.content)
-                        .highlight_with::<highlighter::Highlighter>(
-                            highlighter::Settings {
-                                theme: highlighter_theme,
-                                token: editor
-                                    .path
-                                    .as_ref()
-                                    .and_then(|path| path.extension()?.to_str())
-                                    .unwrap_or("md")
-                                    .to_string(),
-                            },
-                            |highlight, _theme| highlight.to_format(),
-                        )
-                        .size(app_config.text_size)
-                        .padding(0)
-                        .retain_focus_on_external_click(true)
-                        .on_action(Message::Edit),
-                )
-                .id(editor_scrollable_id())
-                .on_scroll(|vp| Message::ScrollChanged(editor_scrollable_id(), vp))
-                .height(Length::Fixed(size.height - 5.)), // This is a bit of a workaround but it works,
-                widget::Id::new("text_editor_widget"),
+            scrollable(
+                TextEditor::new(&editor.content)
+                    .highlight_with::<highlighter::Highlighter>(
+                        highlighter::Settings {
+                            theme: highlighter_theme,
+                            token: editor
+                                .path
+                                .as_ref()
+                                .and_then(|path| path.extension()?.to_str())
+                                .unwrap_or("md")
+                                .to_string(),
+                        },
+                        |highlight, _theme| highlight.to_format(),
+                    )
+                    .size(app_config.text_size)
+                    .padding(0)
+                    .retain_focus_on_external_click(true)
+                    .on_action(Message::Edit),
             )
+            .id(editor_scrollable_id())
+            .on_scroll(|vp| Message::ScrollChanged(editor_scrollable_id(), vp))
+            .height(Length::Fixed(size.height - 5.)) // This is a bit of a workaround but it works,
             .into()
         }))
         .padding([5, spacing.space_xxs])
