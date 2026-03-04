@@ -1188,6 +1188,7 @@ impl<Message> Binding<Message> {
         match modified_key.as_ref() {
             keyboard::Key::Named(key::Named::Enter) => Some(Self::Enter),
             keyboard::Key::Named(key::Named::Backspace) => Some(Self::Backspace),
+            keyboard::Key::Named(key::Named::Tab) => Some(Self::Insert('\t')),
             keyboard::Key::Named(key::Named::Delete)
                 if text.is_none() || text.as_deref() == Some("\u{7f}") =>
             {
