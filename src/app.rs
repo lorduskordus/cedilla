@@ -2,7 +2,8 @@
 
 use crate::app::app_menu::MenuAction;
 use crate::app::context_page::ContextPage;
-use crate::app::core::history::HistoryState;
+use crate::app::core::editor::EditorState;
+use crate::app::core::preview::MarkdownPreview;
 use crate::app::core::project::ProjectNode;
 use crate::app::core::utils::{self, CedillaToast, Image};
 use crate::app::dialogs::{DialogPage, DialogState};
@@ -16,13 +17,13 @@ use cosmic::iced_widget::{center, column, row, scrollable, tooltip};
 use cosmic::widget::space::horizontal;
 use cosmic::widget::{self, about::About, menu};
 use cosmic::widget::{
-    ToastId, Toasts, button, container, image, nav_bar, pane_grid, responsive, segmented_button,
-    svg, text, text_input, toaster,
+    ToastId, Toasts, button, container, nav_bar, pane_grid, responsive, segmented_button, text,
+    text_input, toaster,
 };
 use cosmic::{prelude::*, surface, theme};
-use frostmark::{MarkState, MarkWidget, UpdateMsg};
+use frostmark::{MarkWidget, UpdateMsg};
 use slotmap::Key as SlotMapKey;
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::collections::{HashMap, VecDeque};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use widgets::{TextEditor, text_editor};
@@ -77,26 +78,14 @@ pub struct AppModel {
 enum State {
     Loading,
     Ready {
-        /// Current if/any file path
-        path: Option<PathBuf>,
-        /// Text Editor Content
-        editor_content: widgets::text_editor::Content,
-        /// Markdown Preview state
-        markstate: MarkState,
-        /// Images in the Markdown preview
-        images: HashMap<String, image::Handle>,
-        /// SVGs in the Markdown preview
-        svgs: HashMap<String, svg::Handle>,
-        /// Keep track of images in progress/downloading
-        images_in_progress: HashSet<String>,
-        /// Track if any changes have been made to the current file
-        is_dirty: bool,
+        /// Holds the state for editor related fields
+        editor: EditorState,
+        /// Holds the state for preview related fields
+        preview: MarkdownPreview,
         /// Pane grid state
         panes: pane_grid::State<PaneContent>,
         /// Controls if the preview is hidden or not
         preview_state: PreviewState,
-        /// Allows us to undo and redo
-        history: HistoryState,
     },
 }
 
@@ -447,17 +436,9 @@ impl cosmic::Application for AppModel {
     }
 
     fn on_nav_select(&mut self, id: nav_bar::Id) -> Task<cosmic::Action<Message>> {
-        let State::Ready {
-            editor_content,
-            is_dirty,
-            history,
-            path,
-            ..
-        } = &self.state
-        else {
+        let State::Ready { editor, .. } = &self.state else {
             return Task::none();
         };
-        let old_path = path;
 
         let node_opt = match self.nav_model.data_mut::<ProjectNode>(id) {
             Some(node) => {
@@ -500,8 +481,8 @@ impl cosmic::Application for AppModel {
                         //store parent directory of selected file
                         //self.selected_nav_path = path.parent().map(|p| p.to_path_buf());
 
-                        if *is_dirty {
-                            if needs_confirmation(old_path, history, editor_content) {
+                        if editor.is_dirty {
+                            if editor.needs_confirmation() {
                                 Task::done(cosmic::action::app(Message::DialogAction(
                                     dialogs::DialogAction::OpenConfirmCloseFileDialog(
                                         DiscardChangesAction::OpenFile(path),
@@ -547,26 +528,12 @@ impl cosmic::Application for AppModel {
         let content: Element<_> = match &self.state {
             State::Loading => center(text(fl!("loading"))).into(),
             State::Ready {
-                path,
-                editor_content,
-                markstate,
-                images,
-                svgs,
-                is_dirty,
+                editor,
+                preview,
                 panes,
                 preview_state,
                 ..
-            } => cedilla_main_view(
-                &self.config,
-                path,
-                editor_content,
-                markstate,
-                images,
-                svgs,
-                is_dirty,
-                panes,
-                preview_state,
-            ),
+            } => cedilla_main_view(&self.config, editor, preview, panes, preview_state),
         };
 
         toaster(&self.toasts, container(content).center(Length::Fill))
@@ -816,15 +783,10 @@ impl AppModel {
 //
 
 /// View of the header of this screen
-#[allow(clippy::too_many_arguments)]
 fn cedilla_main_view<'a>(
     app_config: &'a CedillaConfig,
-    path: &'a Option<PathBuf>,
-    editor_content: &'a text_editor::Content,
-    markstate: &'a MarkState,
-    images: &'a HashMap<String, image::Handle>,
-    svgs: &'a HashMap<String, svg::Handle>,
-    is_dirty: &'a bool,
+    editor: &'a EditorState,
+    preview: &'a MarkdownPreview,
     panes: &'a pane_grid::State<PaneContent>,
     preview_state: &'a PreviewState,
 ) -> Element<'a, Message> {
@@ -840,11 +802,12 @@ fn cedilla_main_view<'a>(
 
             widget::id_container(
                 scrollable(
-                    TextEditor::new(editor_content)
+                    TextEditor::new(&editor.content)
                         .highlight_with::<highlighter::Highlighter>(
                             highlighter::Settings {
                                 theme: highlighter_theme,
-                                token: path
+                                token: editor
+                                    .path
                                     .as_ref()
                                     .and_then(|path| path.extension()?.to_str())
                                     .unwrap_or("md")
@@ -910,13 +873,13 @@ fn cedilla_main_view<'a>(
                 PaneContent::Editor => create_editor().into(),
                 PaneContent::Preview => container(
                     scrollable(
-                        MarkWidget::new(markstate)
+                        MarkWidget::new(&preview.markstate)
                             .on_updating_state(Message::UpdateMarkState)
                             .on_clicking_link(Message::LaunchUrl)
                             .text_size(app_config.text_size)
                             .code_highlight_theme(highlighter_theme)
                             .on_drawing_image(|info| {
-                                if let Some(image) = images.get(info.url).cloned() {
+                                if let Some(image) = preview.images.get(info.url).cloned() {
                                     let mut img = widget::image(image);
                                     if let Some(w) = info.width {
                                         img = img.width(w);
@@ -925,7 +888,7 @@ fn cedilla_main_view<'a>(
                                         img = img.height(h);
                                     }
                                     img.into()
-                                } else if let Some(svg_f) = svgs.get(info.url).cloned() {
+                                } else if let Some(svg_f) = preview.svgs.get(info.url).cloned() {
                                     let mut svg = widget::svg(svg_f);
                                     if let Some(w) = info.width {
                                         svg = svg.width(w);
@@ -960,7 +923,7 @@ fn cedilla_main_view<'a>(
     };
 
     let status_bar: Element<Message> = {
-        let file_path = match path.as_deref().and_then(Path::to_str) {
+        let file_path = match editor.path.as_deref().and_then(Path::to_str) {
             Some(path) => {
                 if path.starts_with(&app_config.vault_path) {
                     let relative = path
@@ -974,14 +937,14 @@ fn cedilla_main_view<'a>(
             None => text(fl!("new-file")).size(12),
         };
 
-        let dirty_indicator = if *is_dirty {
+        let dirty_indicator = if editor.is_dirty {
             text("•").size(12)
         } else {
             text("").size(12)
         };
 
         let position = {
-            let cursor = editor_content.cursor();
+            let cursor = editor.content.cursor();
             text(format!(
                 "{}:{}",
                 cursor.position.line + 1,
@@ -1064,16 +1027,6 @@ fn cedilla_main_view<'a>(
         .width(Length::Fill)
         .height(Length::Fill)
         .into()
-}
-
-/// Returns true if it's a vault path with any modification or if it's a new file with any content
-fn needs_confirmation(
-    path: &Option<PathBuf>,
-    history: &HistoryState,
-    editor_content: &widgets::text_editor::Content,
-) -> bool {
-    (path.is_some() && history.history_index != 0)
-        || (path.is_none() && !editor_content.text().trim().is_empty())
 }
 
 /// Returns the text editor scrollable Id

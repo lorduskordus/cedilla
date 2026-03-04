@@ -33,10 +33,8 @@ impl AppModel {
         self.remove_nav_node(&path);
 
         // if the deleted file was currently open, create a new empty file
-        if let State::Ready {
-            path: open_path, ..
-        } = &self.state
-            && open_path.as_deref() == Some(&path)
+        if let State::Ready { editor, .. } = &self.state
+            && editor.path.as_deref() == Some(&path)
         {
             return self.update(Message::NewFile);
         }
@@ -92,14 +90,11 @@ impl AppModel {
 
         // update the open editor state if the open file was inside the renamed path
         #[allow(clippy::collapsible_if)]
-        if let State::Ready {
-            path: open_path, ..
-        } = &mut self.state
-        {
-            if let Some(current) = open_path.as_deref() {
+        if let State::Ready { editor, .. } = &mut self.state {
+            if let Some(current) = editor.path.as_deref() {
                 if current.starts_with(&old_path) {
                     let suffix = current.strip_prefix(&old_path).unwrap().to_path_buf();
-                    *open_path = Some(if suffix == std::path::Path::new("") {
+                    editor.path = Some(if suffix == std::path::Path::new("") {
                         new_path.clone()
                     } else {
                         new_path.join(suffix)
@@ -151,12 +146,10 @@ impl AppModel {
             self.open_vault_folder(&vault_path);
         }
 
-        if let State::Ready {
-            path: open_path, ..
-        } = &mut self.state
-            && open_path.as_deref() == Some(&source_path)
+        if let State::Ready { editor, .. } = &mut self.state
+            && editor.path.as_deref() == Some(&source_path)
         {
-            *open_path = Some(dest);
+            editor.path = Some(dest);
         }
 
         Task::none()

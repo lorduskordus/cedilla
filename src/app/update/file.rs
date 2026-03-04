@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0
 
+use crate::app::core::editor::EditorState;
 use crate::app::core::history::HistoryState;
+use crate::app::core::preview::MarkdownPreview;
 use crate::app::core::utils::{self, CedillaToast};
 use crate::app::{AppModel, Message, PreviewState, State};
 use crate::app::{DiscardChangesAction, create_default_panes};
@@ -41,16 +43,20 @@ impl AppModel {
         }
 
         self.state = State::Ready {
-            path: None,
-            editor_content: text_editor::Content::new(),
-            markstate: MarkState::with_html_and_markdown(""),
-            images: HashMap::new(),
-            svgs: HashMap::new(),
-            images_in_progress: HashSet::new(),
-            is_dirty: true,
+            editor: EditorState {
+                path: None,
+                content: text_editor::Content::new(),
+                is_dirty: true,
+                history: HistoryState::default(),
+            },
+            preview: MarkdownPreview {
+                markstate: MarkState::with_html_and_markdown(""),
+                images: HashMap::new(),
+                svgs: HashMap::new(),
+                images_in_progress: HashSet::new(),
+            },
             panes,
             preview_state,
-            history: HistoryState::default(),
         };
         Task::none()
     }
@@ -59,16 +65,20 @@ impl AppModel {
         let panes = create_default_panes();
 
         self.state = State::Ready {
-            path: None,
-            editor_content: text_editor::Content::new(),
-            markstate: MarkState::with_html_and_markdown(""),
-            images: HashMap::new(),
-            svgs: HashMap::new(),
-            images_in_progress: HashSet::new(),
-            is_dirty: true,
+            editor: EditorState {
+                path: None,
+                content: text_editor::Content::new(),
+                is_dirty: true,
+                history: HistoryState::default(),
+            },
+            preview: MarkdownPreview {
+                markstate: MarkState::with_html_and_markdown(""),
+                images: HashMap::new(),
+                svgs: HashMap::new(),
+                images_in_progress: HashSet::new(),
+            },
             panes,
             preview_state: PreviewState::Shown,
-            history: HistoryState::default(),
         };
         Task::none()
     }
@@ -103,16 +113,20 @@ impl AppModel {
         let panes = create_default_panes();
 
         self.state = State::Ready {
-            path: Some(file_path),
-            editor_content: text_editor::Content::new(),
-            markstate: MarkState::with_html_and_markdown(""),
-            images: HashMap::new(),
-            svgs: HashMap::new(),
-            images_in_progress: HashSet::new(),
-            is_dirty: true,
+            editor: EditorState {
+                path: Some(file_path),
+                content: text_editor::Content::new(),
+                is_dirty: true,
+                history: HistoryState::default(),
+            },
+            preview: MarkdownPreview {
+                markstate: MarkState::with_html_and_markdown(""),
+                images: HashMap::new(),
+                svgs: HashMap::new(),
+                images_in_progress: HashSet::new(),
+            },
             panes,
             preview_state: PreviewState::Shown,
-            history: HistoryState::default(),
         };
 
         Task::none()
@@ -152,22 +166,16 @@ impl AppModel {
     }
 
     pub fn handle_save_file(&mut self) -> Task<cosmic::Action<Message>> {
-        let State::Ready {
-            editor_content,
-            path,
-            is_dirty,
-            ..
-        } = &mut self.state
-        else {
+        let State::Ready { editor, .. } = &mut self.state else {
             return Task::none();
         };
 
-        if !*is_dirty {
+        if !editor.is_dirty {
             return Task::none();
         }
 
-        let content = editor_content.text();
-        let path = path.clone();
+        let content = editor.content.text();
+        let path = editor.path.clone();
         let vault_path = self.config.vault_path.clone();
 
         Task::perform(
@@ -208,26 +216,31 @@ impl AppModel {
                 let images_in_progress = HashSet::new();
 
                 self.state = State::Ready {
-                    path: Some(path),
-                    editor_content: text_editor::Content::with_text(content.as_ref()),
-                    markstate,
-                    images: HashMap::new(),
-                    svgs: HashMap::new(),
-                    images_in_progress,
-                    is_dirty: false,
+                    editor: EditorState {
+                        path: Some(path),
+                        content: text_editor::Content::with_text(content.as_ref()),
+                        is_dirty: false,
+                        history: HistoryState::new_with_content(content.to_string()),
+                    },
+                    preview: MarkdownPreview {
+                        markstate,
+                        images: HashMap::new(),
+                        svgs: HashMap::new(),
+                        images_in_progress,
+                    },
                     panes,
                     preview_state: PreviewState::Shown,
-                    history: HistoryState::new_with_content(content.to_string()),
                 };
 
                 if let State::Ready {
-                    markstate,
-                    images_in_progress,
-                    path,
-                    ..
+                    editor, preview, ..
                 } = &mut self.state
                 {
-                    return utils::images::download_images(markstate, images_in_progress, path);
+                    return utils::images::download_images(
+                        &mut preview.markstate,
+                        &mut preview.images_in_progress,
+                        &editor.path,
+                    );
                 }
 
                 Task::none()
@@ -242,12 +255,12 @@ impl AppModel {
     ) -> Task<cosmic::Action<Message>> {
         match result {
             Ok(new_path) => {
-                let State::Ready { path, is_dirty, .. } = &mut self.state else {
+                let State::Ready { editor, .. } = &mut self.state else {
                     return Task::none();
                 };
 
-                *path = Some(new_path);
-                *is_dirty = false;
+                editor.path = Some(new_path);
+                editor.is_dirty = false;
 
                 self.update(Message::AddToast(CedillaToast::new("File Saved!")))
             }

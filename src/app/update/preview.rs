@@ -7,7 +7,7 @@ use crate::app::{
 use crate::config::BoolState;
 use cosmic::iced_widget::{pane_grid, scrollable};
 use cosmic::prelude::*;
-use cosmic::widget::{self, image, svg};
+use cosmic::widget::{self};
 use frostmark::UpdateMsg;
 
 impl AppModel {
@@ -15,8 +15,8 @@ impl AppModel {
         &mut self,
         message: UpdateMsg,
     ) -> Task<cosmic::Action<Message>> {
-        if let State::Ready { markstate, .. } = &mut self.state {
-            markstate.update(message)
+        if let State::Ready { preview, .. } = &mut self.state {
+            preview.markstate.update(message)
         }
         Task::none()
     }
@@ -25,16 +25,16 @@ impl AppModel {
         &mut self,
         res: Result<Image, anywho::Error>,
     ) -> Task<cosmic::Action<Message>> {
-        let State::Ready { images, svgs, .. } = &mut self.state else {
+        let State::Ready { preview, .. } = &mut self.state else {
             return Task::none();
         };
 
         match res {
             Ok(image) => {
                 if image.is_svg {
-                    svgs.insert(image.url, svg::Handle::from_memory(image.bytes));
+                    preview.insert_svg(image.url, image.bytes);
                 } else {
-                    images.insert(image.url, image::Handle::from_bytes(image.bytes));
+                    preview.insert_image(image.url, image.bytes);
                 }
             }
             Err(err) => {

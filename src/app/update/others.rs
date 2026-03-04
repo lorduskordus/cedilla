@@ -9,20 +9,15 @@ use std::process;
 
 impl AppModel {
     pub fn handle_export_pdf(&mut self) -> Task<cosmic::Action<Message>> {
-        let State::Ready {
-            editor_content,
-            path,
-            ..
-        } = &mut self.state
-        else {
+        let State::Ready { editor, .. } = &mut self.state else {
             return Task::none();
         };
 
-        let content = editor_content.text();
+        let content = editor.content.text();
 
         if self.config.is_gotenberg_configured() && !content.trim().is_empty() {
             let client = self.gotenberg_client.clone();
-            let file_path = path.clone();
+            let file_path = editor.path.clone();
 
             Task::perform(
                 async move {
@@ -54,11 +49,8 @@ impl AppModel {
         window_id: window::Id,
     ) -> Task<cosmic::Action<Message>> {
         let State::Ready {
-            editor_content,
-            is_dirty,
-            history,
+            editor,
             preview_state,
-            path,
             ..
         } = &self.state
         else {
@@ -94,14 +86,14 @@ impl AppModel {
                 eprintln!("{err}");
             }
 
-            if let Err(err) = self.config.set_last_open_file(handler, path.clone()) {
+            if let Err(err) = self.config.set_last_open_file(handler, editor.path.clone()) {
                 eprintln!("{err}");
             }
         }
 
-        if *is_dirty {
+        if editor.is_dirty {
             // if it's a vault path with any modification or if it's a new file with any content
-            if crate::app::needs_confirmation(path, history, editor_content) {
+            if editor.needs_confirmation() {
                 println!("TODO: We're here but for some reason it doesn't work");
                 //self.update(Message::DialogAction(
                 //    dialogs::DialogAction::OpenConfirmCloseFileDialog(
