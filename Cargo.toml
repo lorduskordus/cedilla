@@ -29,6 +29,7 @@ slotmap.workspace = true
 percent-encoding.workspace = true
 reqwest.workspace = true
 url.workspace = true
+dissimilar.workspace = true
 
 # PDF Generation Generation
 gotenberg_pdf.workspace = true
@@ -55,7 +56,7 @@ rust-embed = "8.11.0"
 
 # Added by me
 serde = { version = "1.0.228", features = ["derive"] }
-tokio = { version = "1.49.0", features = ["fs"] }
+tokio = { version = "1.50.0", features = ["fs"] }
 anywho = "0.1.2"
 dirs = "6.0.0"
 ignore = "0.4.25"
@@ -66,6 +67,7 @@ url = "2.5.8"
 base64 = "0.22.1"
 regex = "1.12.3"
 pulldown-cmark = "0.13.1"
+dissimilar = "1.0.10"
 gotenberg_pdf = { git = "https://github.com/mariinkys/gotenberg_pdf" }
 
 [workspace.dependencies.libcosmic]

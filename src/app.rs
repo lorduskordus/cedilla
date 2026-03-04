@@ -2,6 +2,7 @@
 
 use crate::app::app_menu::MenuAction;
 use crate::app::context_page::ContextPage;
+use crate::app::core::history::HistoryState;
 use crate::app::core::project::ProjectNode;
 use crate::app::core::utils::{self, CedillaToast, Image};
 use crate::app::dialogs::{DialogPage, DialogState};
@@ -95,10 +96,8 @@ enum State {
         panes: pane_grid::State<PaneContent>,
         /// Controls if the preview is hidden or not
         preview_state: PreviewState,
-        /// snapshots of text (needed for ctrl-z)
-        history: Vec<String>,
-        /// current position in history
-        history_index: usize,
+        /// Allows us to undo and redo
+        history: HistoryState,
     },
 }
 
@@ -468,7 +467,7 @@ impl cosmic::Application for AppModel {
         let State::Ready {
             editor_content,
             is_dirty,
-            history_index,
+            history,
             path,
             ..
         } = &self.state
@@ -519,7 +518,7 @@ impl cosmic::Application for AppModel {
                         //self.selected_nav_path = path.parent().map(|p| p.to_path_buf());
 
                         if *is_dirty {
-                            if (old_path.is_some() && *history_index != 0)
+                            if (old_path.is_some() && history.history_index != 0)
                                 || (old_path.is_none() && !editor_content.text().trim().is_empty())
                             {
                                 Task::done(cosmic::action::app(Message::DialogAction(
@@ -800,8 +799,7 @@ impl cosmic::Application for AppModel {
                     is_dirty: true,
                     panes,
                     preview_state,
-                    history: Vec::new(),
-                    history_index: 0,
+                    history: HistoryState::default(),
                 };
                 Task::none()
             }
@@ -820,8 +818,7 @@ impl cosmic::Application for AppModel {
                     is_dirty: true,
                     panes,
                     preview_state: PreviewState::Shown,
-                    history: Vec::new(),
-                    history_index: 0,
+                    history: HistoryState::default(),
                 };
                 Task::none()
             }
@@ -867,8 +864,7 @@ impl cosmic::Application for AppModel {
                     is_dirty: true,
                     panes,
                     preview_state: PreviewState::Shown,
-                    history: Vec::new(),
-                    history_index: 0,
+                    history: HistoryState::default(),
                 };
 
                 Task::none()
@@ -969,8 +965,7 @@ impl cosmic::Application for AppModel {
                         is_dirty: false,
                         panes,
                         preview_state: PreviewState::Shown,
-                        history: vec![content.to_string()],
-                        history_index: 0,
+                        history: HistoryState::new_with_content(content.to_string()),
                     };
 
                     if let State::Ready {
@@ -995,7 +990,6 @@ impl cosmic::Application for AppModel {
                     markstate,
                     images_in_progress,
                     history,
-                    history_index,
                     ..
                 } = &mut self.state
                 else {
@@ -1010,15 +1004,28 @@ impl cosmic::Application for AppModel {
                     *is_dirty = true;
                     let current_text = editor_content.text();
 
-                    history.truncate(*history_index + 1);
-                    history.push(current_text);
-                    *history_index = history.len() - 1;
+                    // reconstruct the previous text so we can diff against it
+                    let prev_text = core::history::apply_patch(
+                        &history.history_base,
+                        &history.history_patches[..history.history_index],
+                    );
+                    let patch = core::history::make_patch(&prev_text, &current_text);
 
-                    // keep only the last 100 snapshots
-                    if history.len() > 100 {
-                        history.remove(0);
-                    } else {
-                        *history_index = history.len() - 1;
+                    // discard any redo patches above current index
+                    history.history_patches.truncate(history.history_index);
+                    history.history_patches.push(patch);
+                    history.history_index = history.history_patches.len();
+
+                    // keep only the last 100 patches; rebase onto the new base
+                    if history.history_patches.len() > 100 {
+                        // advance the base by applying the oldest patch
+                        let new_base = core::history::apply_single(
+                            &history.history_base,
+                            &history.history_patches[0],
+                        );
+                        history.history_base = new_base;
+                        history.history_patches.remove(0);
+                        history.history_index = history.history_patches.len();
                     }
                 }
 
@@ -1323,19 +1330,22 @@ impl cosmic::Application for AppModel {
                     images_in_progress,
                     is_dirty,
                     history,
-                    history_index,
                     ..
                 } = &mut self.state
                 else {
                     return Task::none();
                 };
 
-                if *history_index > 0 {
-                    *history_index -= 1;
-                    let snapshot = history[*history_index].clone();
+                if history.history_index > 0 {
+                    history.history_index -= 1;
+                    let snapshot = core::history::apply_patch(
+                        &history.history_base,
+                        &history.history_patches[..history.history_index],
+                    );
                     *editor_content = text_editor::Content::with_text(&snapshot);
                     *markstate = MarkState::with_html_and_markdown(&snapshot);
-                    *is_dirty = *history_index != 0;
+                    *is_dirty =
+                        history.history_index != 0 || !history.history_base.trim().is_empty();
                 }
 
                 utils::images::download_images(markstate, images_in_progress, path)
@@ -1347,16 +1357,18 @@ impl cosmic::Application for AppModel {
                     markstate,
                     images_in_progress,
                     history,
-                    history_index,
                     ..
                 } = &mut self.state
                 else {
                     return Task::none();
                 };
 
-                if *history_index + 1 < history.len() {
-                    *history_index += 1;
-                    let snapshot = history[*history_index].clone();
+                if history.history_index < history.history_patches.len() {
+                    history.history_index += 1;
+                    let snapshot = core::history::apply_patch(
+                        &history.history_base,
+                        &history.history_patches[..history.history_index],
+                    );
                     *editor_content = text_editor::Content::with_text(&snapshot);
                     *markstate = MarkState::with_html_and_markdown(&snapshot);
                 }
@@ -1510,7 +1522,7 @@ impl cosmic::Application for AppModel {
                 let State::Ready {
                     editor_content,
                     is_dirty,
-                    history_index,
+                    history,
                     preview_state,
                     path,
                     ..
@@ -1554,7 +1566,7 @@ impl cosmic::Application for AppModel {
                 }
 
                 if *is_dirty {
-                    if (path.is_some() && *history_index != 0)
+                    if (path.is_some() && history.history_index != 0)
                         || (path.is_none() && !editor_content.text().trim().is_empty())
                     {
                         println!("TODO: We're here but for some reason it doesn't work");
