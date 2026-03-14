@@ -125,6 +125,14 @@
   </keywords>
 
   <releases>
+  <release version="0.1.1" date="2026-03-14">
+    <description>
+        <p>Changed the default window size</p>
+        <p>Improved handling of list elements</p>
+        <p>Added permissions warning to Move Vault feature</p>
+        <p>Allow opening vault location in File Explorer from Settings page</p>
+    </description>
+  </release>
     <release version="0.1.0" date="2026-03-13">
       <description>
         <p>Application Release</p>
