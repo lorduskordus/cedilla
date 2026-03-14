@@ -42,6 +42,17 @@ pub enum SelectionAction {
     Rule,
 }
 
+impl SelectionAction {
+    pub fn is_line_action(&self) -> bool {
+        matches!(
+            &self,
+            SelectionAction::BulletedList
+                | SelectionAction::NumberedList
+                | SelectionAction::CheckboxList
+        )
+    }
+}
+
 impl AppModel {
     /// Apply formatting to the currently selected text in the editor
     pub fn apply_formatting_to_selection(
@@ -53,6 +64,15 @@ impl AppModel {
         };
 
         let selection = editor.content.selection().unwrap_or_default();
+
+        // for list actions with no selection, move to line start first
+        let is_line_action = action.is_line_action();
+        if selection.is_empty() && is_line_action {
+            editor
+                .content
+                .perform(text_editor::Action::Move(text_editor::Motion::Home));
+        };
+
         let formatted = format_selected_text(&selection, action);
         let formatted = formatted.trim_end_matches('\n').to_string();
         let formatted_len = formatted.chars().count();
@@ -63,16 +83,23 @@ impl AppModel {
                 Arc::new(formatted),
             )));
 
-        for _ in 0..formatted_len {
+        if selection.is_empty() && is_line_action {
+            // if nothing was selected and we modify the full line keep the cursor at the end
             editor
                 .content
-                .perform(text_editor::Action::Move(text_editor::Motion::Left));
-        }
+                .perform(text_editor::Action::Move(text_editor::Motion::End));
+        } else {
+            for _ in 0..formatted_len {
+                editor
+                    .content
+                    .perform(text_editor::Action::Move(text_editor::Motion::Left));
+            }
 
-        for _ in 0..formatted_len {
-            editor
-                .content
-                .perform(text_editor::Action::Select(text_editor::Motion::Right));
+            for _ in 0..formatted_len {
+                editor
+                    .content
+                    .perform(text_editor::Action::Select(text_editor::Motion::Right));
+            }
         }
 
         editor.push_history();
@@ -83,44 +110,47 @@ impl AppModel {
 }
 
 /// Format the selected text based on the action
-fn format_selected_text(text: &str, action: SelectionAction) -> String {
-    let is_empty = text.is_empty();
+fn format_selected_text(selected_text: &str, action: SelectionAction) -> String {
+    let is_empty = selected_text.is_empty();
 
     match action {
-        SelectionAction::Heading1 => toggle_heading(text, 1),
-        SelectionAction::Heading2 => toggle_heading(text, 2),
-        SelectionAction::Heading3 => toggle_heading(text, 3),
-        SelectionAction::Heading4 => toggle_heading(text, 4),
-        SelectionAction::Heading5 => toggle_heading(text, 5),
-        SelectionAction::Heading6 => toggle_heading(text, 6),
+        SelectionAction::Heading1 => toggle_heading(selected_text, 1),
+        SelectionAction::Heading2 => toggle_heading(selected_text, 2),
+        SelectionAction::Heading3 => toggle_heading(selected_text, 3),
+        SelectionAction::Heading4 => toggle_heading(selected_text, 4),
+        SelectionAction::Heading5 => toggle_heading(selected_text, 5),
+        SelectionAction::Heading6 => toggle_heading(selected_text, 6),
 
         SelectionAction::Bold => {
             if is_empty {
                 "****".to_string()
-            } else if text.starts_with("**") && text.ends_with("**") && text.len() >= 4 {
-                text[2..text.len() - 2].to_string()
+            } else if selected_text.starts_with("**")
+                && selected_text.ends_with("**")
+                && selected_text.len() >= 4
+            {
+                selected_text[2..selected_text.len() - 2].to_string()
             } else {
-                format!("**{}**", text)
+                format!("**{}**", selected_text)
             }
         }
 
         SelectionAction::Italic => {
             if is_empty {
                 "**".to_string()
-            } else if is_italic(text) {
-                text[1..text.len() - 1].to_string()
+            } else if is_italic(selected_text) {
+                selected_text[1..selected_text.len() - 1].to_string()
             } else {
-                format!("*{}*", text)
+                format!("*{}*", selected_text)
             }
         }
 
         SelectionAction::Hyperlink => {
             if is_empty {
                 "[](url)".to_string()
-            } else if text.starts_with('[') && text.ends_with(')') {
-                text.to_string()
+            } else if selected_text.starts_with('[') && selected_text.ends_with(')') {
+                selected_text.to_string()
             } else {
-                format!("[{}](url)", text)
+                format!("[{}](url)", selected_text)
             }
         }
 
@@ -128,58 +158,68 @@ fn format_selected_text(text: &str, action: SelectionAction) -> String {
             if is_empty {
                 // cycle: nothing → inline → block → nothing
                 "``".to_string()
-            } else if text.starts_with("```") && text.ends_with("```") && text.len() > 6 {
+            } else if selected_text.starts_with("```")
+                && selected_text.ends_with("```")
+                && selected_text.len() > 6
+            {
                 // code block → nothing (strip fences)
-                let inner = &text[3..text.len() - 3];
+                let inner = &selected_text[3..selected_text.len() - 3];
                 inner.trim_matches('\n').to_string()
-            } else if text.starts_with('`') && text.ends_with('`') && text.len() >= 2 {
+            } else if selected_text.starts_with('`')
+                && selected_text.ends_with('`')
+                && selected_text.len() >= 2
+            {
                 // inline code → code block
-                let inner = &text[1..text.len() - 1];
+                let inner = &selected_text[1..selected_text.len() - 1];
                 format!("```\n{}\n```", inner)
             } else {
                 // nothing → inline code
-                format!("`{}`", text)
+                format!("`{}`", selected_text)
             }
         }
 
         SelectionAction::Image => {
             if is_empty {
                 "![](image-url)".to_string()
-            } else if text.starts_with("![") && text.ends_with(')') {
-                text.to_string()
+            } else if selected_text.starts_with("![") && selected_text.ends_with(')') {
+                selected_text.to_string()
             } else {
-                format!("![{}](image-url)", text)
+                format!("![{}](image-url)", selected_text)
             }
         }
 
         SelectionAction::BulletedList => {
             if is_empty {
                 "- ".to_string()
-            } else if all_lines_have_prefix(text, "- ") {
-                remove_line_prefix(text, "- ")
+            } else if all_lines_have_prefix(selected_text, "- ") {
+                remove_line_prefix(selected_text, "- ")
             } else {
-                format_list(text, "- ")
+                format_list(selected_text, "- ")
             }
         }
 
         SelectionAction::NumberedList => {
             if is_empty {
                 "1. ".to_string()
-            } else if all_lines_are_numbered(text) {
-                remove_numbered_list(text)
+            } else if all_lines_are_numbered(selected_text) {
+                remove_numbered_list(selected_text)
             } else {
-                format_numbered_list(text)
+                format_numbered_list(selected_text)
             }
         }
 
         SelectionAction::CheckboxList => {
             if is_empty {
                 "- [ ] ".to_string()
-            } else if all_lines_have_prefix(text, "- [ ] ") || all_lines_have_prefix(text, "- [x] ")
+            } else if all_lines_have_prefix(selected_text, "- [ ] ")
+                || all_lines_have_prefix(selected_text, "- [x] ")
             {
-                remove_line_prefix(remove_line_prefix(text, "- [ ] ").as_str(), "- [x] ")
+                remove_line_prefix(
+                    remove_line_prefix(selected_text, "- [ ] ").as_str(),
+                    "- [x] ",
+                )
             } else {
-                format_list(text, "- [ ] ")
+                format_list(selected_text, "- [ ] ")
             }
         }
 
