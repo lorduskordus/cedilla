@@ -13,7 +13,9 @@
     "--socket=wayland",
     "--device=dri",
     "--share=network",
-    "--filesystem=home",
+    "--filesystem=xdg-documents",
+    "--filesystem=xdg-download",
+    "--filesystem=xdg-pictures",
     "--filesystem=xdg-config/cosmic:rw",
     "--talk-name=com.system76.CosmicSettingsDaemon"
   ],
