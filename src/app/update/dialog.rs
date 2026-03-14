@@ -58,13 +58,7 @@ impl AppModel {
                         }
                     };
 
-                    match open::that(path) {
-                        Ok(()) => Task::none(),
-                        Err(err) => {
-                            eprintln!("failed to open {path:?}: {err}");
-                            Task::none()
-                        }
-                    }
+                    self.handle_open_in_file_explorer(path)
                 } else {
                     Task::none()
                 }

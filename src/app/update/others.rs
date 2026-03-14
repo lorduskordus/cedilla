@@ -4,9 +4,21 @@ use crate::app::core::utils::{self, CedillaToast};
 use crate::app::{AppModel, DiscardChangesAction, Message, PreviewState, State, dialogs};
 use crate::config::ShowState;
 use cosmic::prelude::*;
+use std::path::Path;
 use std::process;
 
 impl AppModel {
+    /// Opens the given path in the default file explorer (or default app if target is not a directory)
+    pub fn handle_open_in_file_explorer(&self, path: &Path) -> Task<cosmic::Action<Message>> {
+        match open::that(path) {
+            Ok(()) => Task::none(),
+            Err(err) => {
+                eprintln!("failed to open {path:?}: {err}");
+                Task::none()
+            }
+        }
+    }
+
     pub fn handle_export_pdf(&mut self) -> Task<cosmic::Action<Message>> {
         let State::Ready { editor, .. } = &mut self.state else {
             return Task::none();

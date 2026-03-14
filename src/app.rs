@@ -195,6 +195,9 @@ pub enum Message {
     /// Callback after input on the Config [`ContextPage`]
     ConfigInput(ConfigInput),
 
+    /// Open the given path in the default file explorer
+    OpenInFileExplorer(PathBuf),
+
     /// Export current document to PDF
     ExportPDF,
     /// Callback after using asks to close the app
@@ -705,6 +708,7 @@ impl cosmic::Application for AppModel {
             Message::ConfigInput(input) => self.handle_config_input(input),
 
             // Others
+            Message::OpenInFileExplorer(path) => self.handle_open_in_file_explorer(&path),
             Message::ExportPDF => self.handle_export_pdf(),
             Message::AppCloseRequested => self.handle_app_close_requested(),
         }
@@ -786,20 +790,39 @@ impl AppModel {
                             horizontal(),
                             widget::tooltip(
                                 widget::icon(icons::get_handle("dialog-information-symbolic", 18)),
-                                container(text(fl!("flatpak-permissions")))
-                                    .padding(6.)
-                                    .max_width(250.),
+                                container(
+                                    column![
+                                        text(fl!("flatpak-permissions")),
+                                        text(fl!("flatpak-permissions-note"))
+                                    ]
+                                    .spacing(10.)
+                                )
+                                .padding(6.)
+                                .max_width(250.),
                                 tooltip::Position::Left
                             ),
                         ]
                         .align_y(Alignment::Center)
                         .into(),
-                        text::caption(fl!("current-location", location = location_label)).into(),
                         row![
-                            horizontal(),
+                            column![
+                                text::body(fl!("current-location")),
+                                button::custom(
+                                    text(location_label)
+                                        .wrapping(cosmic::iced_core::text::Wrapping::Glyph)
+                                        .width(Length::Fill)
+                                )
+                                .on_press(Message::OpenInFileExplorer(PathBuf::from(
+                                    self.config.vault_path.clone()
+                                )))
+                                .class(theme::Button::Link)
+                            ]
+                            .width(Length::FillPortion(1)),
                             widget::button::destructive(fl!("move-vault"))
-                                .on_press(Message::MoveVault),
+                                .on_press(Message::MoveVault)
+                                .width(Length::Shrink)
                         ]
+                        .align_y(Alignment::Center)
                         .into(),
                     ])
                     .spacing(cosmic::theme::spacing().space_xxs),
