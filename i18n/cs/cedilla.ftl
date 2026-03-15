@@ -6,11 +6,13 @@ delete = Smazat
 rename = Přejmenovat
 move = Přesunout
 move-to = Přesunout do
+open-file-manager = Zobrazit ve správci souborů
 name = Název
 
 <#-- About Page -->
 repository = Repozitář
 support = Podpora
+donations = Přispět
 
 <#-- Main App -->
 editor = Editor
@@ -29,6 +31,8 @@ theme = Motiv
 match-desktop = Podle systému
 dark = Tmavý
 light = Světlý
+dark-highlighter = Tmavý motiv zvýraznění
+light-highlighter = Světlý motiv zvýraznění
 
 <#-- Settings Context Page -->
 general = Obecné
@@ -47,6 +51,9 @@ gotenberg-url = Nastavit URL serveru Gotenberg
 apply = Použít
 more-info = Více informací
 text-size = Velikost textu
+vault-default-location = Výchozí (adresář s daty aplikace)
+flatpak-permissions = Ve výchozím nastavení má verze Flatpak oprávnění přistupovat pouze ke složkám Dokumenty, Stažené a Obrázky. Přesunutí trezoru do jiného umístění způsobí, že aplikace přestane správně fungovat. Pokud chcete používat i jiné adresáře, upravte prosím oprávnění pomocí nástrojů, jako je Flatseal.
+flatpak-permissions-note = Upozornění: To samé platí pro načítání obrázků. Lokální obrázky se načtou pouze tehdy, když jsou ve složce s uděleným oprávněním.
 
 <#-- Application MenuBar -->
 file = Soubor

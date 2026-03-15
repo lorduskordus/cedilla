@@ -76,11 +76,13 @@
       <image>
         https://raw.githubusercontent.com/mariinkys/cedilla/main/resources/screenshots/other-light.png</image>
       <caption xml:lang="en">Features Showcase (Light)</caption>
+      <caption xml:lang="cs">Ukázka funkcí (Světlý režim)</caption>
     </screenshot>
     <screenshot>
       <image>
         https://raw.githubusercontent.com/mariinkys/cedilla/main/resources/screenshots/other-dark.png</image>
       <caption xml:lang="en">Features Showcase (Dark)</caption>
+      <caption xml:lang="cs">Ukázka funkcí (Tmavý režim)</caption>
     </screenshot>
   </screenshots>
 
