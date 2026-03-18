@@ -20,11 +20,15 @@ impl AppModel {
     }
 
     pub fn handle_export_pdf(&mut self) -> Task<cosmic::Action<Message>> {
-        let State::Ready { editor, .. } = &mut self.state else {
+        let State::Ready {
+            editor, preview, ..
+        } = &mut self.state
+        else {
             return Task::none();
         };
 
         let content = editor.content.text();
+        let typst_cache = preview.markstate.get_typst_cache();
 
         if self.config.is_gotenberg_configured() && !content.trim().is_empty() {
             let client = self.gotenberg_client.clone();
@@ -33,9 +37,10 @@ impl AppModel {
             Task::perform(
                 async move {
                     match utils::files::open_pdf_file_saver().await {
-                        Some(path) => {
-                            Some(utils::pdf::export_pdf(client, file_path, content, path).await)
-                        }
+                        Some(path) => Some(
+                            utils::pdf::export_pdf(client, file_path, content, path, typst_cache)
+                                .await,
+                        ),
                         // Error selecting where to save the file
                         None => None,
                     }

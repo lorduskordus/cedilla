@@ -1,7 +1,13 @@
 use std::{
+    collections::HashMap,
+    io::Cursor,
     path::{Path, PathBuf},
     sync::OnceLock,
 };
+
+use base64::{Engine as _, engine::general_purpose};
+use cosmic::widget::image::Handle;
+use image::{ImageBuffer, Rgba};
 
 // We do this so that we don't have to recompile the regex every time
 static MD_IMG_RE: OnceLock<regex::Regex> = OnceLock::new();
@@ -81,32 +87,107 @@ async fn read_image_as_data_uri(base_dir: &Path, path: &str) -> Option<String> {
     Some(format!("data:{};base64,{}", mime, b64))
 }
 
+fn replace_typst_blocks(content: &str, typst_cache: &HashMap<String, Handle>) -> String {
+    use pulldown_cmark::{CodeBlockKind, Event, Options, Parser, Tag, TagEnd, html};
+
+    let mut in_typst = false;
+    let mut typst_source = String::new();
+    let mut typst_replacements: Vec<(usize, String)> = Vec::new();
+    let mut typst_index = 0;
+
+    let events: Vec<Event> = Parser::new_ext(content, Options::all())
+        .filter_map(|event| match event {
+            Event::Start(Tag::CodeBlock(CodeBlockKind::Fenced(ref lang)))
+                if matches!(lang.as_ref(), "typst" | "typ") =>
+            {
+                in_typst = true;
+                typst_source.clear();
+                None
+            }
+            Event::Text(ref text) if in_typst => {
+                typst_source.push_str(text);
+                None
+            }
+            Event::End(TagEnd::CodeBlock) if in_typst => {
+                in_typst = false;
+                let source = typst_source.trim().to_owned();
+                let placeholder = format!("TYPST_PLACEHOLDER_{}", typst_index);
+
+                let replacement = match typst_cache.get(&source) {
+                    Some(handle) => {
+                        let b64 = handle_to_base64_png(handle);
+                        format!(
+                            "<img src=\"data:image/png;base64,{}\" style=\"max-width:100%;height:auto\" />\n",
+                            b64
+                        )
+                    }
+                    None => {
+                        format!("<pre><code>{}</code></pre>\n", source)
+                    },
+                };
+
+                typst_replacements.push((typst_index, replacement));
+                typst_index += 1;
+                Some(Event::Html(placeholder.into()))
+            }
+            _ => Some(event),
+        })
+        .collect();
+
+    let mut out = String::new();
+    html::push_html(&mut out, events.into_iter());
+
+    for (index, replacement) in typst_replacements {
+        let placeholder = format!("TYPST_PLACEHOLDER_{}", index);
+        out = out.replace(&placeholder, &replacement);
+    }
+
+    out
+}
+
+fn handle_to_base64_png(handle: &Handle) -> String {
+    match handle {
+        Handle::Rgba {
+            width,
+            height,
+            pixels,
+            ..
+        } => {
+            let img: ImageBuffer<Rgba<u8>, Vec<u8>> =
+                ImageBuffer::from_raw(*width, *height, pixels.to_vec())
+                    .expect("Failed to create ImageBuffer");
+
+            let mut png_bytes: Vec<u8> = Vec::new();
+            img.write_to(&mut Cursor::new(&mut png_bytes), image::ImageFormat::Png)
+                .expect("Failed to encode PNG");
+
+            general_purpose::STANDARD.encode(&png_bytes)
+        }
+        _ => panic!("Expected Rgba handle"),
+    }
+}
+
 pub async fn export_pdf(
     client: gotenberg_pdf::Client,
     file_path: Option<PathBuf>,
     file_content: String,
     file_destination_path: String,
+    typst_cache: HashMap<String, Handle>,
 ) -> Result<(), anywho::Error> {
-    use pulldown_cmark::{Options, Parser, html};
-
-    let (title, processed_content) = match &file_path {
+    let (title, base_dir) = match &file_path {
         Some(path) => {
             let title = path
                 .file_stem()
                 .and_then(|s| s.to_str())
                 .unwrap_or("Document")
                 .to_string();
-            let base_dir = path.parent().unwrap_or(Path::new("."));
-            let processed = embed_local_images(&file_content, base_dir).await;
-            (title, processed)
+            (title, path.parent().unwrap_or(Path::new(".")).to_path_buf())
         }
-        None => ("Document".to_string(), file_content.clone()),
+        None => ("Document".to_string(), PathBuf::from(".")),
     };
 
-    // we convert the markdown to html ourselves
-    let mut md_html = String::new();
-    let parser = Parser::new_ext(&processed_content, Options::all());
-    html::push_html(&mut md_html, parser);
+    let md_html = replace_typst_blocks(&file_content, &typst_cache);
+    let md_html = embed_local_images(&md_html, &base_dir).await;
 
     let full_html = format!(
         r#"<!doctype html>
@@ -119,8 +200,8 @@ pub async fn export_pdf(
                 <script>hljs.highlightAll();</script>
                 <style>
                     img {{
-                    max-width: 100%;
-                    height: auto;
+                        max-width: 100%;
+                        height: auto;
                     }}
                 </style>
             </head>
