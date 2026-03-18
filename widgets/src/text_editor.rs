@@ -406,6 +406,7 @@ where
 {
     editor: R::Editor,
     is_dirty: bool,
+    font: Option<R::Font>,
 }
 
 impl<R> Content<R>
@@ -422,6 +423,7 @@ where
         Self(RefCell::new(Internal {
             editor: R::Editor::with_text(text),
             is_dirty: true,
+            font: None,
         }))
     }
 
@@ -640,6 +642,13 @@ where
         let mut internal = self.content.0.borrow_mut();
         let state = tree.state.downcast_mut::<State<Highlighter>>();
 
+        let current_font = self.font.unwrap_or_else(|| renderer.default_font());
+
+        if internal.font != Some(current_font) {
+            state.highlighter.borrow_mut().change_line(0);
+            internal.font = Some(current_font);
+        }
+
         if state.highlighter_format_address != self.highlighter_format as usize {
             state.highlighter.borrow_mut().change_line(0);
 
@@ -663,7 +672,7 @@ where
 
         internal.editor.update(
             limits.shrink(self.padding).max(),
-            self.font.unwrap_or_else(|| renderer.default_font()),
+            current_font,
             self.text_size.unwrap_or_else(|| renderer.default_size()),
             self.line_height,
             self.wrapping,
