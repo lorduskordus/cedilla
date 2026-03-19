@@ -1204,6 +1204,8 @@ fn cedilla_main_view<'a>(
                     .on_press(Message::ApplyFormatting(utils::SelectionAction::Hyperlink)),
                 button::icon(icons::get_handle("helperbar/code-symbolic", 18))
                     .on_press(Message::ApplyFormatting(utils::SelectionAction::Code)),
+                button::icon(icons::get_handle("helperbar/math-symbolic", 18))
+                    .on_press(Message::ApplyFormatting(utils::SelectionAction::Math)),
                 button::icon(icons::get_handle("helperbar/image-symbolic", 18))
                     .on_press(Message::ApplyFormatting(utils::SelectionAction::Image)),
                 horizontal().width(18.),

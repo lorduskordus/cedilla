@@ -30,6 +30,8 @@ pub enum SelectionAction {
     Hyperlink,
     /// Convert selection to code
     Code,
+    /// Convert selection to math
+    Math,
     /// Convert selection to image / Insert image template
     Image,
     /// Convert selection to bulleted list / Insert list item
@@ -175,6 +177,17 @@ fn format_selected_text(selected_text: &str, action: SelectionAction) -> String 
             } else {
                 // nothing → inline code
                 format!("`{}`", selected_text)
+            }
+        }
+
+        SelectionAction::Math => {
+            if is_empty {
+                "```typst\n\n```".to_string()
+            } else if selected_text.starts_with("```typst") && selected_text.ends_with("```") {
+                let inner = &selected_text["```typst".len()..selected_text.len() - 3];
+                inner.trim_matches('\n').to_string()
+            } else {
+                format!("```typst\n{}\n```", selected_text)
             }
         }
 
