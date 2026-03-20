@@ -1274,12 +1274,6 @@ fn cedilla_main_view<'a>(
             None => fl!("no-results"),
         };
 
-        let regex_button_label = if editor.search.use_regex {
-            ".*  ✓"
-        } else {
-            ".*"
-        };
-
         let search_box = container(
             row![
                 text_input(fl!("search"), &editor.search.search_value)
@@ -1294,7 +1288,7 @@ fn cedilla_main_view<'a>(
                 button::icon(icons::get_handle("go-down-symbolic", 16))
                     .on_press(Message::Search(SearchAction::NextResult))
                     .class(theme::Button::Icon),
-                button::text(regex_button_label)
+                button::icon(icons::get_handle("regex-symbolic", 18))
                     .on_press(Message::Search(SearchAction::ToggleRegex))
                     .class(if editor.search.use_regex {
                         theme::Button::Suggested
