@@ -13,6 +13,8 @@ pub enum SearchAction {
     ToggleRegex,
     NextResult,
     PrevResult,
+
+    FocusSearchField,
 }
 
 #[derive(Debug, Clone)]

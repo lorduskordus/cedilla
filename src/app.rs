@@ -1284,6 +1284,7 @@ fn cedilla_main_view<'a>(
             row![
                 text_input(fl!("search"), &editor.search.search_value)
                     .id(search_input_id())
+                    .on_focus(Message::Search(SearchAction::FocusSearchField))
                     .on_input(|v| Message::Search(SearchAction::UpdateSearchValue(v)))
                     .on_submit(|_v| Message::Search(SearchAction::NextResult))
                     .width(Length::Fixed(200.)),

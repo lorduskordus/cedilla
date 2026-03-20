@@ -148,6 +148,8 @@ impl AppModel {
                     Task::none()
                 }
             }
+
+            SearchAction::FocusSearchField => cosmic::widget::text_input::focus(search_input_id()),
         }
     }
 }
