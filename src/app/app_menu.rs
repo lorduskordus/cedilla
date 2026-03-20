@@ -75,6 +75,7 @@ pub fn menu_bar<'a>(key_binds: &HashMap<KeyBind, MenuAction>) -> Element<'a, Mes
                 vec![
                     menu::Item::Button(fl!("undo"), None, MenuAction::Undo),
                     menu::Item::Button(fl!("redo"), None, MenuAction::Redo),
+                    menu::Item::Button(fl!("search"), None, MenuAction::Search),
                 ],
             ),
         ),
