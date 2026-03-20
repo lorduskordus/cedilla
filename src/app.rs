@@ -1316,7 +1316,7 @@ fn cedilla_main_view<'a>(
                     .right(spacing.space_s as f32),
             );
 
-        cosmic::widget::layer_container(cosmic::iced_widget::stack!(base, overlay)).into()
+        cosmic::iced_widget::stack!(base, overlay).into()
     }
 }
 
