@@ -1,5 +1,6 @@
 use std::path::PathBuf;
 
+use cosmic::widget::text_editor::{Cursor, Position};
 use widgets::text_editor;
 
 use crate::app::core::{
@@ -46,8 +47,9 @@ pub struct EditorSearchState {
 }
 
 impl EditorState {
-    pub fn push_history(&mut self) {
+    pub fn push_history(&mut self, cursor_before: (usize, usize)) {
         let current_text = self.content.text();
+        let cursor_after = self.content.cursor().position;
 
         // reconstruct the previous text so we can diff against it
         let prev_text = super::history::apply_patch(
@@ -60,7 +62,18 @@ impl EditorState {
         self.history
             .history_patches
             .truncate(self.history.history_index);
+        self.history
+            .cursor_before
+            .truncate(self.history.history_index);
+        self.history
+            .cursor_after
+            .truncate(self.history.history_index);
+
         self.history.history_patches.push(patch);
+        self.history.cursor_before.push(cursor_before);
+        self.history
+            .cursor_after
+            .push((cursor_after.line, cursor_after.column));
         self.history.history_index = self.history.history_patches.len();
 
         // keep only the last 100 patches; rebase onto the new base
@@ -71,13 +84,21 @@ impl EditorState {
                 &self.history.history_patches[0],
             );
             self.history.history_base = new_base;
-            self.history.history_patches.remove(0);
+            self.history.cursor_before.remove(0);
+            self.history.cursor_after.remove(0);
             self.history.history_index = self.history.history_patches.len();
         }
     }
 
     pub fn undo(&mut self, preview: &mut MarkdownPreview) {
         if self.history.history_index > 0 {
+            let (line, col) = self
+                .history
+                .cursor_before
+                .get(self.history.history_index - 1)
+                .copied()
+                .unwrap_or((0, 0));
+
             self.history.history_index -= 1;
             let snapshot = super::history::apply_patch(
                 &self.history.history_base,
@@ -88,11 +109,20 @@ impl EditorState {
             preview.update_content(&snapshot);
             self.is_dirty =
                 self.history.history_index != 0 || !self.history.history_base.trim().is_empty();
+
+            self.restore_cursor(line, col);
         }
     }
 
     pub fn redo(&mut self, preview: &mut MarkdownPreview) {
         if self.history.history_index < self.history.history_patches.len() {
+            let (line, col) = self
+                .history
+                .cursor_after
+                .get(self.history.history_index)
+                .copied()
+                .unwrap_or((0, 0));
+
             self.history.history_index += 1;
             let snapshot = super::history::apply_patch(
                 &self.history.history_base,
@@ -101,6 +131,8 @@ impl EditorState {
 
             self.content = text_editor::Content::with_text(&snapshot);
             preview.update_content(&snapshot);
+
+            self.restore_cursor(line, col);
         }
     }
 
@@ -162,5 +194,25 @@ impl EditorState {
             self.content
                 .perform(text_editor::Action::Edit(text_editor::Edit::Insert('\t')));
         }
+    }
+
+    fn restore_cursor(&mut self, line: usize, column: usize) {
+        let line_count = self.content.line_count();
+        let safe_line = line.min(line_count.saturating_sub(1));
+
+        // clamp column to actual char count of that line
+        let safe_col = self
+            .content
+            .line(safe_line)
+            .map(|l| column.min(l.text.chars().count()))
+            .unwrap_or(0);
+
+        self.content.move_to(Cursor {
+            position: Position {
+                line: safe_line,
+                column: safe_col,
+            },
+            selection: None,
+        });
     }
 }

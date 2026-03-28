@@ -17,6 +17,7 @@ impl AppModel {
         };
 
         let was_edit = action.is_edit();
+        let cursor_before = editor.content.cursor().position;
 
         if let text_editor::Action::Edit(text_editor::Edit::Enter) = &action {
             editor.handle_list_continuation();
@@ -30,7 +31,7 @@ impl AppModel {
 
         if was_edit {
             editor.is_dirty = true;
-            editor.push_history();
+            editor.push_history((cursor_before.line, cursor_before.column));
         }
 
         let snap_task = snap_task(editor, was_edit);
