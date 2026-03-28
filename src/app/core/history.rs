@@ -6,6 +6,8 @@ pub struct HistoryState {
     pub history_base: String,
     pub history_patches: Vec<Vec<dissimilar::Chunk<'static>>>,
     pub history_index: usize,
+    pub cursor_before: Vec<(usize, usize)>, // cursor before patch[i] was applied
+    pub cursor_after: Vec<(usize, usize)>,  // cursor after patch[i] was applied
 }
 
 impl HistoryState {
@@ -14,6 +16,8 @@ impl HistoryState {
             history_base: content,
             history_patches: Vec::new(),
             history_index: 0,
+            cursor_before: Vec::new(),
+            cursor_after: Vec::new(),
         }
     }
 }

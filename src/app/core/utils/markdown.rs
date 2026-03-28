@@ -65,6 +65,7 @@ impl AppModel {
             return Task::none();
         };
 
+        let cursor_before = editor.content.cursor().position;
         let selection = editor.content.selection().unwrap_or_default();
 
         // for list actions with no selection, move to line start first
@@ -104,7 +105,7 @@ impl AppModel {
             }
         }
 
-        editor.push_history();
+        editor.push_history((cursor_before.line, cursor_before.column));
         editor.is_dirty = true;
 
         Task::none()
