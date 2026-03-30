@@ -362,6 +362,7 @@ impl AppModel {
             .any(|d| matches!(d, crate::app::dialogs::DialogPage::ExternalFileModified(_)));
 
         if currently_open && !already_shown {
+            editor.is_dirty = true; // we mark it as dirty so if the file has been removed and we keep the current version it creates it again
             self.dialog_pages
                 .push_back(crate::app::dialogs::DialogPage::ExternalFileModified(path));
         }
