@@ -53,7 +53,7 @@ impl AppModel {
                 history: HistoryState::default(),
                 scroll: EditorScrollState::default(),
                 search: EditorSearchState::default(),
-                just_saved: false,
+                ignore_next_external_change: false,
             },
             preview: MarkdownPreview {
                 markstate: MarkState::with_html_and_markdown(""),
@@ -84,7 +84,7 @@ impl AppModel {
                     ..EditorScrollState::default()
                 },
                 search: EditorSearchState::default(),
-                just_saved: false,
+                ignore_next_external_change: false,
             },
             preview: MarkdownPreview {
                 markstate: MarkState::with_html_and_markdown(""),
@@ -147,7 +147,7 @@ impl AppModel {
                     ..EditorScrollState::default()
                 },
                 search: EditorSearchState::default(),
-                just_saved: false,
+                ignore_next_external_change: false,
             },
             preview: MarkdownPreview {
                 markstate: MarkState::with_html_and_markdown(""),
@@ -212,7 +212,7 @@ impl AppModel {
         let content = editor.content.text();
         let path = editor.path.clone();
         let vault_path = self.config.vault_path.clone();
-        editor.just_saved = true;
+        editor.ignore_next_external_change = true;
 
         Task::perform(
             async move {
@@ -262,7 +262,7 @@ impl AppModel {
                             ..EditorScrollState::default()
                         },
                         search: EditorSearchState::default(),
-                        just_saved: false,
+                        ignore_next_external_change: false,
                     },
                     preview: MarkdownPreview {
                         markstate,
@@ -323,7 +323,7 @@ impl AppModel {
             let State::Ready { editor, .. } = &mut self.state else {
                 return Task::none();
             };
-            editor.just_saved = false;
+            editor.ignore_next_external_change = false;
 
             Task::none()
         }
@@ -350,8 +350,8 @@ impl AppModel {
             return Task::none();
         };
 
-        if editor.just_saved {
-            editor.just_saved = false;
+        if editor.ignore_next_external_change {
+            editor.ignore_next_external_change = false;
             return Task::none();
         }
 
