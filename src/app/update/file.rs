@@ -67,7 +67,8 @@ impl AppModel {
     }
 
     pub fn handle_new_file(&mut self) -> Task<cosmic::Action<Message>> {
-        let panes = create_default_panes();
+        let panes = get_previous_pane_state(self);
+        let preview_state = get_previous_preview_state(self);
 
         self.state = State::Ready {
             editor: EditorState {
@@ -90,7 +91,7 @@ impl AppModel {
                 images_in_progress: HashSet::new(),
             },
             panes,
-            preview_state: PreviewState::Shown,
+            preview_state,
         };
 
         Task::batch([
@@ -128,7 +129,8 @@ impl AppModel {
 
         self.insert_file_node(&file_path, &dir);
 
-        let panes = create_default_panes();
+        let panes = get_previous_pane_state(self);
+        let preview_state = get_previous_preview_state(self);
 
         self.state = State::Ready {
             editor: EditorState {
@@ -151,7 +153,7 @@ impl AppModel {
                 images_in_progress: HashSet::new(),
             },
             panes,
-            preview_state: PreviewState::Shown,
+            preview_state,
         };
 
         Task::batch([
@@ -240,7 +242,8 @@ impl AppModel {
                     self.selected_nav_path = path.parent().map(|p| p.to_path_buf());
                 }
 
-                let panes = create_default_panes();
+                let panes = get_previous_pane_state(self);
+                let preview_state = get_previous_preview_state(self);
 
                 let markstate = MarkState::with_html_and_markdown(content.as_ref());
                 let images_in_progress = HashSet::new();
@@ -266,7 +269,7 @@ impl AppModel {
                         images_in_progress,
                     },
                     panes,
-                    preview_state: PreviewState::Shown,
+                    preview_state,
                 };
 
                 let reset_editor =
@@ -330,4 +333,24 @@ impl AppModel {
             }
         }
     }
+}
+
+/// Returns the previous state of the panes if available, default if not
+fn get_previous_pane_state(
+    app_model: &AppModel,
+) -> cosmic::widget::pane_grid::State<crate::app::PaneContent> {
+    let State::Ready { panes, .. } = &app_model.state else {
+        return create_default_panes();
+    };
+
+    panes.clone()
+}
+
+/// Returns the previous state of the preview if available, default if not
+fn get_previous_preview_state(app_model: &AppModel) -> PreviewState {
+    let State::Ready { preview_state, .. } = &app_model.state else {
+        return PreviewState::Shown;
+    };
+
+    preview_state.clone()
 }
