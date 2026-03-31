@@ -854,6 +854,16 @@ impl AppModel {
                     ),
                 )
                 .add(
+                    widget::settings::item::builder(fl!("text-size"))
+                        .description(format!("{}px", self.config.text_size))
+                        .control(
+                            widget::slider(6..=30, self.config.text_size as u16, |v| {
+                                Message::ConfigInput(ConfigInput::UpdateTextSize(v))
+                            })
+                            .step(1u16),
+                        ),
+                )
+                .add(
                     widget::settings::item::builder(fl!("selected-font")).control(
                         row![
                             widget::dropdown(&self.system_fonts, Some(font_selected), |index| {
@@ -945,16 +955,6 @@ impl AppModel {
                             },
                         ),
                     ),
-                )
-                .add(
-                    widget::settings::item::builder(fl!("text-size"))
-                        .description(format!("{}px", self.config.text_size))
-                        .control(
-                            widget::slider(6..=30, self.config.text_size as u16, |v| {
-                                Message::ConfigInput(ConfigInput::UpdateTextSize(v))
-                            })
-                            .step(1u16),
-                        ),
                 )
                 .add(
                     cosmic::widget::column::with_children(vec![
