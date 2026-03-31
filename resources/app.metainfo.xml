@@ -128,6 +128,14 @@
   </keywords>
 
   <releases>
+    <release version="0.1.6" date="2026-03-31">
+        <description>
+            <p>Preserve panes state when changing file</p>
+            <p>Watch for external file changes on the currently open file</p>
+            <p>Other fixes and improvments</p>
+            <p>Updated dependencies</p>
+        </description>
+    </release>
     <release version="0.1.5" date="2026-03-30">
         <description>
             <p>Improved heading weight handling</p>
